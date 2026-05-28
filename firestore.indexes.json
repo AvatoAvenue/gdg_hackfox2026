@@ -1,0 +1,28 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "barriers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "reportedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "barriers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "type", "order": "ASCENDING" },
+        { "fieldPath": "reportedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "barriers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "reportedAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

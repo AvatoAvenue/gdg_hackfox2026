@@ -21,6 +21,9 @@
 # ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
 # CRITICAL: Protect sensitive data from accidental commits to version control
 
+# API Keys — nunca subir al repo
+lib/core/constants/api_keys.dart
+
 *.crt
 *.key
 *.keystore
