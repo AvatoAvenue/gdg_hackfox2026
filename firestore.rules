@@ -1,0 +1,25 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Barriers: anyone can read, authenticated users can create
+    match /barriers/{barrierId} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasAll(['lat', 'lng', 'type', 'description', 'reportedAt', 'status'])
+        && request.resource.data.lat is float
+        && request.resource.data.lng is float
+        && request.resource.data.type is string
+        && request.resource.data.status == 'pending';
+      // Only Cloud Functions (admin SDK) can update
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // Block all other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
