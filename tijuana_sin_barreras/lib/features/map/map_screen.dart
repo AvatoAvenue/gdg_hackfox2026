@@ -11,6 +11,7 @@ import '../../core/models/emergency_alert.dart';
 import '../../core/services/firebase_service.dart';
 import '../../core/services/geo_utils.dart';
 import '../../core/services/tts_service.dart';
+import '../../shared/utils/report_guard.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class MapScreen extends StatefulWidget {
@@ -435,7 +436,7 @@ class _MapScreenState extends State<MapScreen>
           const SizedBox(height: 12),
           FloatingActionButton.extended(
             heroTag: 'report',
-            onPressed: () => Navigator.pushNamed(context, '/report'),
+            onPressed: () => openReportGuarded(context),
             icon: const Icon(Icons.add_location_alt),
             label: const Text('Reportar'),
             backgroundColor: AppColors.brandActive,
