@@ -174,7 +174,7 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: (hasLocation ? AppColors.secondary : AppColors.warning).withValues(alpha:0.1),
+        color: (hasLocation ? AppColors.secondary : AppColors.warning).withOpacity(0.1),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -212,7 +212,7 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
           label: Text(type),
           selected: selected,
           onSelected: (_) => setState(() => _selectedType = type),
-          selectedColor: AppColors.danger.withValues(alpha:0.15),
+          selectedColor: AppColors.danger.withOpacity(0.15),
           checkmarkColor: AppColors.danger,
           labelStyle: TextStyle(
             color: selected ? AppColors.danger : AppColors.onSurface,
@@ -293,9 +293,9 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.primary.withValues(alpha:0.05),
+        color: AppColors.primary.withOpacity(0.05),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.primary.withValues(alpha:0.25)),
+        border: Border.all(color: AppColors.primary.withOpacity(0.25)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -323,7 +323,7 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
       style: ElevatedButton.styleFrom(
         backgroundColor: AppColors.danger,
         foregroundColor: Colors.white,
-        disabledBackgroundColor: AppColors.danger.withValues(alpha:0.5),
+        disabledBackgroundColor: AppColors.danger.withOpacity(0.5),
       ),
       icon: _submitting
           ? const SizedBox(

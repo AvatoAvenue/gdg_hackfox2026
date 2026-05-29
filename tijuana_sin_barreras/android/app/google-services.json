@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "427747618567",
+    "project_id": "tijuana-barreras-gdg-chdv",
+    "storage_bucket": "tijuana-barreras-gdg-chdv.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:427747618567:android:71d49756d45deaa8f15fa2",
+        "android_client_info": {
+          "package_name": "com.example.talento_sin_barreras"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDqYwu5A4rBjOyd2kjuvhdHCpy-zXANdD8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

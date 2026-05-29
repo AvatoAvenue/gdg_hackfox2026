@@ -37,6 +37,7 @@ lib/core/constants/api_keys.dart
 .env.*
 .env.*.local
 .env.local
+!.env.example
 id_dsa
 id_rsa
 
@@ -179,4 +180,8 @@ test-results/
 # 1. This template is self-contained and includes security patterns
 # 2. No need to add common/security.gitignore separately
 # 3. Test with `git status --ignored` to ensure proper coverage
+
+.antigravitycli/
+.antigravitycli/
+tijuana_sin_barreras/.antigravitycli/
 
