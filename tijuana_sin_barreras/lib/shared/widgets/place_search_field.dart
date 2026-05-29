@@ -170,28 +170,30 @@ class _PlaceSearchFieldState extends State<PlaceSearchField> {
     final size = renderBox.size;
 
     _overlay = OverlayEntry(
-      builder: (ctx) => Positioned(
-        width: size.width,
-        child: CompositedTransformFollower(
-          link: _layerLink,
-          showWhenUnlinked: false,
-          offset: Offset(0, size.height + 6),
-          child: Material(
-            elevation: 6,
-            borderRadius: BorderRadius.circular(12),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 260),
-              child: ListView.separated(
-                padding: EdgeInsets.zero,
-                shrinkWrap: true,
-                itemCount: _suggestions.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (_, i) => _buildSuggestionTile(_suggestions[i]),
+      builder:
+          (ctx) => Positioned(
+            width: size.width,
+            child: CompositedTransformFollower(
+              link: _layerLink,
+              showWhenUnlinked: false,
+              offset: Offset(0, size.height + 6),
+              child: Material(
+                elevation: 6,
+                borderRadius: BorderRadius.circular(12),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 260),
+                  child: ListView.separated(
+                    padding: EdgeInsets.zero,
+                    shrinkWrap: true,
+                    itemCount: _suggestions.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder:
+                        (_, i) => _buildSuggestionTile(_suggestions[i]),
+                  ),
+                ),
               ),
             ),
           ),
-        ),
-      ),
     );
     Overlay.of(context).insert(_overlay!);
   }
@@ -211,14 +213,15 @@ class _PlaceSearchFieldState extends State<PlaceSearchField> {
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
       ),
-      subtitle: s.secondaryText.isNotEmpty
-          ? Text(
-              s.secondaryText,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12),
-            )
-          : null,
+      subtitle:
+          s.secondaryText.isNotEmpty
+              ? Text(
+                s.secondaryText,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12),
+              )
+              : null,
       onTap: () => _select(s),
     );
   }
@@ -232,24 +235,31 @@ class _PlaceSearchFieldState extends State<PlaceSearchField> {
         focusNode: _focusNode,
         textInputAction: TextInputAction.search,
         onChanged: _onChanged,
+        style: const TextStyle(fontSize: 12),
         decoration: InputDecoration(
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 6,
+          ),
           hintText: widget.hintText,
           prefixIcon: Icon(widget.icon, color: widget.iconColor),
-          suffixIcon: _loading
-              ? const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                )
-              : (_controller.text.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: _clear,
-                    )
-                  : null),
+          suffixIcon:
+              _loading
+                  ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                  : (_controller.text.isNotEmpty
+                      ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: _clear,
+                      )
+                      : null),
         ),
       ),
     );
