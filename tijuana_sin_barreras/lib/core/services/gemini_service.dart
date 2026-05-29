@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import '../constants/api_keys.dart';
 
@@ -9,8 +9,7 @@ class GeminiService {
   static const _baseUrl =
       'https://generativelanguage.googleapis.com/v1beta/models';
 
-  Future<String?> analyzeBarrierPhoto(File photo) async {
-    final bytes = await photo.readAsBytes();
+  Future<String?> analyzeBarrierPhoto(Uint8List bytes) async {
     final base64Image = base64Encode(bytes);
 
     final uri = Uri.parse('$_baseUrl/$_model:generateContent?key=$_apiKey');

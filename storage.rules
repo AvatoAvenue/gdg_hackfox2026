@@ -1,0 +1,20 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Fotos de barreras: lectura pública (se muestran en el mapa),
+    // subida solo por usuarios autenticados (incl. anónimos).
+    match /barriers/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.resource.size < 5 * 1024 * 1024          // máx 5 MB
+        && request.resource.contentType.matches('image/.*'); // solo imágenes
+    }
+
+    // Bloquear el resto del bucket.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

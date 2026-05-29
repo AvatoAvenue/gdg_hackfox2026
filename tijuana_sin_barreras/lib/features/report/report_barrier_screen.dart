@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
@@ -18,7 +18,7 @@ class ReportBarrierScreen extends StatefulWidget {
 class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
   final _descController = TextEditingController();
   String _selectedType = AppConstants.barrierTypes.first;
-  File? _photo;
+  Uint8List? _photoBytes;
   bool _submitting = false;
   bool _analyzing = false;
   String? _geminiResult;
@@ -46,18 +46,19 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
     );
     if (xFile == null) return;
 
+    final bytes = await xFile.readAsBytes();
     setState(() {
-      _photo = File(xFile.path);
+      _photoBytes = bytes;
       _geminiResult = null;
     });
     await _analyzeWithGemini();
   }
 
   Future<void> _analyzeWithGemini() async {
-    if (_photo == null) return;
+    if (_photoBytes == null) return;
     setState(() => _analyzing = true);
     try {
-      final result = await context.read<GeminiService>().analyzeBarrierPhoto(_photo!);
+      final result = await context.read<GeminiService>().analyzeBarrierPhoto(_photoBytes!);
       if (mounted) setState(() => _geminiResult = result);
     } catch (_) {
     } finally {
@@ -78,8 +79,8 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
       final firebase = context.read<FirebaseService>();
       String? photoUrl;
 
-      if (_photo != null) {
-        photoUrl = await firebase.uploadBarrierPhoto(_photo!);
+      if (_photoBytes != null) {
+        photoUrl = await firebase.uploadBarrierPhoto(_photoBytes!);
       }
 
       final description = _descController.text.trim().isNotEmpty
@@ -226,19 +227,19 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
   Widget _buildPhotoSection() {
     return Column(
       children: [
-        if (_photo != null)
+        if (_photoBytes != null)
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: Image.file(
-              _photo!,
-              height: 180,
+            child: Image.memory(
+              _photoBytes!,
+              height: 280,
               width: double.infinity,
-              fit: BoxFit.cover,
+              fit: BoxFit.contain,
             ),
           )
         else
           Container(
-            height: 110,
+            height: 140,
             decoration: BoxDecoration(
               border: Border.all(color: Colors.grey.shade300),
               borderRadius: BorderRadius.circular(12),

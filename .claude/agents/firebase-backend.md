@@ -17,17 +17,42 @@ Eres el desarrollador backend del equipo Chackethon Developers en HackFox 2026.
 ```javascript
 {
   id: string,           // auto-generated
-  lat: number,          // latitud GPS
-  lng: number,          // longitud GPS
+  lat: number,          // latitud GPS (float)
+  lng: number,          // longitud GPS (float)
   type: string,         // enum: barrierTypes
   description: string,
   photoUrl: string?,    // Firebase Storage URL
   geminiAnalysis: string?, // análisis de Gemini
   reportedAt: Timestamp,
   status: 'pending' | 'verified' | 'resolved',
-  userId: string?       // Firebase Auth UID
+  userId: string?,      // Firebase Auth UID (anónimo o email)
+  verifiedBy: string?,  // UID del moderador que verificó
+  verifiedAt: Timestamp? // cuándo se verificó
 }
 ```
+
+### Colección: `/users/{uid}`  (login + manejo de cuentas)
+Auth: **Google Sign-In + email/password** (sin login anónimo). El perfil se
+crea automáticamente en el primer login. Reportar barreras EXIGE sesión.
+> Android: registrar el **SHA-1** en Firebase Console y actualizar
+> `google-services.json` para que funcione Google Sign-In.
+```javascript
+{
+  uid: string,          // = doc id = Firebase Auth UID
+  email: string?,       // null si la cuenta es anónima
+  displayName: string,
+  role: 'ciudadano' | 'moderador',  // SIEMPRE se crea como 'ciudadano'
+  photoUrl: string?,
+  createdAt: Timestamp,
+  updatedAt: Timestamp?
+}
+```
+- **Ascenso a `moderador`**: manual desde Firebase Console (las reglas impiden
+  que un usuario se auto-asigne el rol).
+- Los **moderadores** son los únicos que pueden cambiar el `status` de una barrera.
+- Modelos Dart: `lib/core/models/user_profile.dart` (+ `UserRole`).
+- Storage rules: `storage.rules` (root) — fotos públicas de lectura, subida solo
+  autenticada, máx 5 MB, solo `image/*`.
 
 ## Cloud Functions — patrones
 ```javascript
@@ -41,9 +66,13 @@ exports.getAccessibleRoute = functions.https.onCall(async (data, context) => { .
 ```
 
 ## Reglas de seguridad — prioridad hackathon
-- Para DEMO: `allow read: if true` (lectura pública del mapa)
-- Para WRITES: `allow create: if request.auth != null`
+- `barriers` read: `if true` (lectura pública del mapa)
+- `barriers` create: `if request.auth != null` (Google/email) + valida campos
+- `barriers` update: `if isModerator()` y solo `status/verifiedBy/verifiedAt`
+- `users`: cada quien lee/edita su perfil; NO puede cambiar su `role` ni `email`
+- helper `isModerator()` lee `/users/{uid}.role` con `get()`
 - NUNCA en producción real: `allow read, write: if true`
+- Fallback de emergencia para demo (si algo bloquea): `allow read, write: if true`
 
 ## Deploy commands
 ```bash

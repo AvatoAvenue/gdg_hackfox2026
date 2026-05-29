@@ -1,7 +1,10 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/constants/app_colors.dart';
 import '../../shared/widgets/app_logo.dart';
+import 'package:provider/provider.dart';
+import '../../core/services/firebase_service.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -11,7 +14,41 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.surfaceNeutral,
       body: SafeArea(
-        child: Column(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 32),
+              _buildHeader(context),
+              const SizedBox(height: 40),
+              _buildHeroText(context),
+              const SizedBox(height: 40),
+              _buildActionCards(context),
+              const Spacer(),
+              _buildFooter(),
+              const SizedBox(height: 24),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: const Icon(Icons.accessible_forward, color: Colors.white, size: 30),
+        ),
+        const SizedBox(width: 14),
+        const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const _MainBar(),
@@ -34,8 +71,54 @@ class HomeScreen extends StatelessWidget {
             ),
           ],
         ),
-      ),
+        const Spacer(),
+        _buildAuthButton(context),
+      ],
     );
+  }
+
+  /// Botón de cuenta: muestra avatar/perfil si hay sesión, o icono de login.
+  Widget _buildAuthButton(BuildContext context) {
+    final firebase = context.read<FirebaseService>();
+    return StreamBuilder<User?>(
+      stream: firebase.authState,
+      builder: (context, snapshot) {
+        final signedIn = snapshot.data != null;
+        return Semantics(
+          label: signedIn ? 'Mi perfil' : 'Iniciar sesión',
+          button: true,
+          child: IconButton(
+            onPressed: () => Navigator.pushNamed(
+              context,
+              signedIn ? '/profile' : '/login',
+            ),
+            icon: Icon(
+              signedIn ? Icons.account_circle : Icons.login,
+              color: AppColors.primary,
+              size: 30,
+            ),
+            tooltip: signedIn ? 'Mi perfil' : 'Iniciar sesión',
+          ),
+        );
+      },
+    );
+  }
+
+  /// Abre el reporte de barrera, exigiendo sesión primero.
+  Future<void> _openReport(BuildContext context) async {
+    final firebase = context.read<FirebaseService>();
+    if (firebase.isSignedIn) {
+      Navigator.pushNamed(context, '/report');
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Inicia sesión para reportar una barrera.')),
+    );
+    final loggedIn = await Navigator.pushNamed(context, '/login');
+    if (loggedIn == true && context.mounted) {
+      Navigator.pushNamed(context, '/report');
+    }
   }
 
   Widget _buildHeroText(BuildContext context) {
