@@ -146,8 +146,22 @@ Future<void> _openReport(BuildContext context) async {
 // ─────────────────────────────────────────────────────────────────────────────
 // Main bar
 // ─────────────────────────────────────────────────────────────────────────────
-class _MainBar extends StatelessWidget {
+class _MainBar extends StatefulWidget {
   const _MainBar();
+
+  @override
+  State<_MainBar> createState() => _MainBarState();
+}
+
+class _MainBarState extends State<_MainBar> {
+  int _hoveredIndex = -1;
+
+  // Dock magnification: hovered item → 1.28×, direct neighbor → ~1.09×, rest → 1.0×
+  double _scaleFor(int i) {
+    if (_hoveredIndex < 0) return 1.0;
+    final dist = (i - _hoveredIndex).abs().toDouble();
+    return 1.0 + 0.28 * (1.0 - dist / 1.5).clamp(0.0, 1.0);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -157,61 +171,70 @@ class _MainBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // Los _NavItem usan popups en hover (solo web/escritorio) y no
-          // navegan; en pantallas estrechas (móvil) se ocultan y quedan las
-          // tarjetas de acción del cuerpo, que sí navegan.
           final showNav = constraints.maxWidth >= 820;
+
+          final navDefs = [
+            (
+              label: 'Mapa',
+              onTap: () => Navigator.pushNamed(context, '/map'),
+              popupTitle: 'Ver mapa accesible',
+              popupBody:
+                  'Explora barreras reportadas\ncerca de ti en tiempo real.',
+              icon: Icons.map_rounded,
+              accentColor: AppColors.brandActive,
+            ),
+            (
+              label: 'Ruta',
+              onTap: () => Navigator.pushNamed(context, '/route'),
+              popupTitle: 'Calcular ruta accesible',
+              popupBody:
+                  'Encuentra el camino más\nseguro para llegar a tu destino.',
+              icon: Icons.alt_route_rounded,
+              accentColor: AppColors.success,
+            ),
+            (
+              label: 'Reportar',
+              onTap: () => _openReport(context),
+              popupTitle: 'Reportar barrera',
+              popupBody: 'Marca obstáculos y ayuda\na otros ciudadanos.',
+              icon: Icons.report_problem_rounded,
+              accentColor: AppColors.error,
+            ),
+          ];
+
           return Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               // ── Brand ──────────────────────────────────────────────────
-              const AppLogo(size: 38, tint: AppColors.brandPassive),
-              const SizedBox(width: 12),
-              Flexible(
-                child: Text(
-                  'Tijuana Sin Barreras',
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: AppColors.brandPassive,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.2,
-                      ),
-                ),
-              ),
-
+              const AppLogo(size: 56),
               const Spacer(),
-
-              // ── Nav items (solo en pantallas anchas) ───────────────────
+              // ── Nav items with dock magnification ──────────────────────
               if (showNav) ...[
-                _NavItem(
-                  label: 'Mapa',
-                  onTap: () => Navigator.pushNamed(context, '/map'),
-                  popupTitle: 'Ver mapa accesible',
-                  popupBody:
-                      'Explora barreras reportadas\ncerca de ti en tiempo real.',
-                  icon: Icons.map_rounded,
-                  accentColor: AppColors.brandActive,
-                ),
-                _NavItem(
-                  label: 'Ruta',
-                  onTap: () => Navigator.pushNamed(context, '/route'),
-                  popupTitle: 'Calcular ruta accesible',
-                  popupBody:
-                      'Encuentra el camino más\nseguro para llegar a tu destino.',
-                  icon: Icons.alt_route_rounded,
-                  accentColor: AppColors.success,
-                ),
-                _NavItem(
-                  label: 'Reportar',
-                  onTap: () => _openReport(context),
-                  popupTitle: 'Reportar barrera',
-                  popupBody: 'Marca obstáculos y ayuda\na otros ciudadanos.',
-                  icon: Icons.report_problem_rounded,
-                  accentColor: AppColors.error,
-                ),
+                for (int i = 0; i < navDefs.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  AnimatedScale(
+                    scale: _scaleFor(i),
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOutCubic,
+                    child: _NavItem(
+                      label: navDefs[i].label,
+                      onTap: navDefs[i].onTap,
+                      popupTitle: navDefs[i].popupTitle,
+                      popupBody: navDefs[i].popupBody,
+                      icon: navDefs[i].icon,
+                      accentColor: navDefs[i].accentColor,
+                      onHoverChange: (hovered) => setState(() {
+                        if (hovered) {
+                          _hoveredIndex = i;
+                        } else if (_hoveredIndex == i) {
+                          _hoveredIndex = -1;
+                        }
+                      }),
+                    ),
+                  ),
+                ],
                 const SizedBox(width: 12),
               ],
-
               // ── Cuenta (login / perfil) ────────────────────────────────
               const _AuthButton(),
             ],
@@ -264,6 +287,7 @@ class _NavItem extends StatefulWidget {
   final String popupBody;
   final IconData icon;
   final Color accentColor;
+  final ValueChanged<bool> onHoverChange;
 
   const _NavItem({
     required this.label,
@@ -272,6 +296,7 @@ class _NavItem extends StatefulWidget {
     required this.popupBody,
     required this.icon,
     required this.accentColor,
+    required this.onHoverChange,
   });
 
   @override
@@ -285,12 +310,13 @@ class _NavItemState extends State<_NavItem> {
 
   void _onEnter() {
     setState(() => _hovered = true);
+    widget.onHoverChange(true);
     _portalController.show();
   }
 
   void _onExit() {
     setState(() => _hovered = false);
-    // Small delay lets the pop-out feel intentional before hiding
+    widget.onHoverChange(false);
     Future.delayed(const Duration(milliseconds: 120), () {
       if (!_hovered && mounted) _portalController.hide();
     });
@@ -315,46 +341,39 @@ class _NavItemState extends State<_NavItem> {
           cursor: SystemMouseCursors.click,
           child: GestureDetector(
             onTap: widget.onTap,
-            child: AnimatedScale(
-              scale: _hovered ? 0.95 : 1.0,
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOutBack,
-              child: AnimatedContainer(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              curve: Curves.easeInOut,
+              padding: const EdgeInsets.symmetric(horizontal: 45, vertical: 8),
+              decoration: BoxDecoration(
+                color: _hovered
+                    ? AppColors.darkDeep.withValues(alpha: 0.16)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: _hovered ? AppColors.brandPassive : Colors.transparent,
+                  width: 1.5,
+                ),
+                boxShadow: _hovered
+                    ? [
+                        BoxShadow(
+                          color: AppColors.brandPassive.withValues(alpha: 0.25),
+                          blurRadius: 22,
+                          spreadRadius: 3,
+                        ),
+                      ]
+                    : [],
+              ),
+              child: AnimatedDefaultTextStyle(
                 duration: const Duration(milliseconds: 160),
-                curve: Curves.easeInOut,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 45, vertical: 8),
-                decoration: BoxDecoration(
-                  color: _hovered
-                      ? AppColors.darkDeep.withOpacity(0.16)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color:
-                        _hovered ? AppColors.brandPassive : Colors.transparent,
-                    width: 1.5,
-                  ),
-                  boxShadow: _hovered
-                      ? [
-                          BoxShadow(
-                            color: AppColors.brandPassive.withOpacity(0.25),
-                            blurRadius: 22,
-                            spreadRadius: 3,
-                          ),
-                        ]
-                      : [],
+                style: GoogleFonts.lexend(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: _hovered ? Colors.white : AppColors.brandPassive,
                 ),
-                child: AnimatedDefaultTextStyle(
-                  duration: const Duration(milliseconds: 160),
-                  style: GoogleFonts.lexend(
-                    fontSize: 14,
-                    fontWeight: _hovered ? FontWeight.w500 : FontWeight.w500,
-                    color: _hovered ? Colors.white : AppColors.brandPassive,
-                  ),
-                  child: Text(widget.label),
-                ),
-              ), // cierra AnimatedContainer
-            ), // cierra AnimatedScale
+                child: Text(widget.label),
+              ),
+            ), // cierra AnimatedContainer
           ), // cierra GestureDetector
         ), // cierra MouseRegion
       ), // cierra OverlayPortal

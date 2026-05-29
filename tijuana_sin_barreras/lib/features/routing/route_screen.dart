@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
@@ -11,6 +12,25 @@ import '../../core/services/firebase_service.dart';
 import '../../core/services/maps_service.dart';
 import '../../core/services/tts_service.dart';
 import '../../shared/widgets/place_search_field.dart';
+
+const _kMapStyle = '''[
+  {"elementType":"geometry","stylers":[{"color":"#1a2b3c"}]},
+  {"elementType":"labels.icon","stylers":[{"visibility":"off"}]},
+  {"elementType":"labels.text.fill","stylers":[{"color":"#a0d3cd"}]},
+  {"elementType":"labels.text.stroke","stylers":[{"color":"#1a2b3c"}]},
+  {"featureType":"administrative","elementType":"geometry","stylers":[{"color":"#2a3d4f"}]},
+  {"featureType":"administrative.locality","elementType":"labels.text.fill","stylers":[{"color":"#289f91"}]},
+  {"featureType":"poi","elementType":"labels.text.fill","stylers":[{"color":"#289f91"}]},
+  {"featureType":"poi.park","elementType":"geometry","stylers":[{"color":"#1c3a2e"}]},
+  {"featureType":"road","elementType":"geometry","stylers":[{"color":"#2a3d4f"}]},
+  {"featureType":"road","elementType":"labels.text.fill","stylers":[{"color":"#a0d3cd"}]},
+  {"featureType":"road.highway","elementType":"geometry","stylers":[{"color":"#289f91"}]},
+  {"featureType":"road.highway","elementType":"geometry.stroke","stylers":[{"color":"#1c7269"}]},
+  {"featureType":"road.highway","elementType":"labels.text.fill","stylers":[{"color":"#e8f7f5"}]},
+  {"featureType":"transit","elementType":"geometry","stylers":[{"color":"#2a3d4f"}]},
+  {"featureType":"water","elementType":"geometry","stylers":[{"color":"#0d1b2a"}]},
+  {"featureType":"water","elementType":"labels.text.fill","stylers":[{"color":"#289f91"}]}
+]''';
 
 class RouteScreen extends StatefulWidget {
   const RouteScreen({super.key});
@@ -118,14 +138,15 @@ class _RouteScreenState extends State<RouteScreen> {
           Marker(
             markerId: const MarkerId('origin'),
             position: origin.latLng,
-            icon:
-                BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+                BitmapDescriptor.hueGreen),
             infoWindow: InfoWindow(title: 'Inicio: ${origin.name}'),
           ),
           Marker(
             markerId: const MarkerId('dest'),
             position: dest.latLng,
-            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+            icon:
+                BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
             infoWindow: InfoWindow(title: 'Destino: ${dest.name}'),
           ),
           ..._buildBarrierMarkers(result),
@@ -181,7 +202,7 @@ class _RouteScreenState extends State<RouteScreen> {
       lines.add(Polyline(
         polylineId: const PolylineId('route_default'),
         points: result.defaultOption.points,
-        color: AppColors.muted.withOpacity(0.5),
+        color: AppColors.brandPassive.withValues(alpha: 0.5),
         width: 4,
         patterns: [PatternItem.dash(20), PatternItem.gap(12)],
       ));
@@ -190,7 +211,7 @@ class _RouteScreenState extends State<RouteScreen> {
     lines.add(Polyline(
       polylineId: const PolylineId('route_best'),
       points: result.best.points,
-      color: AppColors.secondary,
+      color: AppColors.success,
       width: 6,
     ));
 
@@ -226,9 +247,9 @@ class _RouteScreenState extends State<RouteScreen> {
     return result.nearbyBarriers.map((b) {
       final Color color;
       if (remainingIds.contains(b.id)) {
-        color = AppColors.danger;
+        color = AppColors.error;
       } else if (avoidedIds.contains(b.id)) {
-        color = AppColors.secondary;
+        color = AppColors.success;
       } else {
         color = Colors.orange;
       }
@@ -236,8 +257,8 @@ class _RouteScreenState extends State<RouteScreen> {
         circleId: CircleId('barrier_circle_${b.id}'),
         center: LatLng(b.lat, b.lng),
         radius: 25,
-        fillColor: color.withOpacity(0.18),
-        strokeColor: color.withOpacity(0.7),
+        fillColor: color.withValues(alpha: 0.18),
+        strokeColor: color.withValues(alpha: 0.7),
         strokeWidth: 2,
       );
     }).toSet();
@@ -281,8 +302,7 @@ class _RouteScreenState extends State<RouteScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Ruta Accesible'),
-        backgroundColor: AppColors.secondary,
+        title: Text('Ruta Accesible', style: GoogleFonts.lexend()),
         actions: [
           PopupMenuButton<String>(
             tooltip: 'Datos de demo',
@@ -320,6 +340,7 @@ class _RouteScreenState extends State<RouteScreen> {
               initialCameraPosition:
                   const CameraPosition(target: _tijuanaCenter, zoom: 13),
               onMapCreated: _mapController.complete,
+              style: _kMapStyle,
               polylines: _polylines,
               markers: _markers,
               circles: _circles,
@@ -335,7 +356,7 @@ class _RouteScreenState extends State<RouteScreen> {
 
   Widget _buildSearchPanel() {
     return Container(
-      color: Colors.white,
+      color: AppColors.darkDeep,
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
       child: Column(
         children: [
@@ -344,7 +365,7 @@ class _RouteScreenState extends State<RouteScreen> {
             controller: _originCtrl,
             hintText: 'Origen  (ej. Centro Cívico)',
             icon: Icons.trip_origin,
-            iconColor: AppColors.secondary,
+            iconColor: AppColors.success,
             onSelected: (place) => setState(() => _originPlace = place),
             onCleared: () => setState(() => _originPlace = null),
           ),
@@ -354,7 +375,7 @@ class _RouteScreenState extends State<RouteScreen> {
             controller: _destCtrl,
             hintText: 'Destino  (ej. Hospital General)',
             icon: Icons.location_on,
-            iconColor: AppColors.danger,
+            iconColor: AppColors.error,
             onSelected: (place) => setState(() => _destPlace = place),
             onCleared: () => setState(() => _destPlace = null),
           ),
@@ -364,9 +385,14 @@ class _RouteScreenState extends State<RouteScreen> {
           ElevatedButton.icon(
             onPressed: _loading ? null : _calcRoute,
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.secondary,
-              foregroundColor: Colors.white,
               minimumSize: const Size(double.infinity, 50),
+              backgroundColor: AppColors
+                  .surfaceNeutral, // #1C7269 — 5.15:1 contrast vs white
+              foregroundColor: AppColors.darkDeep, // #E7F6F2
+              disabledBackgroundColor:
+                  AppColors.surfaceNeutral.withValues(alpha: 0.45),
+              disabledForegroundColor: Colors.white.withValues(alpha: 0.6),
+              side: const BorderSide(color: AppColors.brandPassive, width: 1),
             ),
             icon: _loading
                 ? const SizedBox(
@@ -376,7 +402,13 @@ class _RouteScreenState extends State<RouteScreen> {
                         strokeWidth: 2, color: Colors.white),
                   )
                 : const Icon(Icons.alt_route),
-            label: Text(_loading ? 'Calculando...' : 'Calcular ruta accesible'),
+            label: Text(
+              _loading ? 'Calculando...' : 'Calcular ruta accesible',
+              style: GoogleFonts.lexend(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),
@@ -392,7 +424,12 @@ class _RouteScreenState extends State<RouteScreen> {
           return Padding(
             padding: const EdgeInsets.only(right: 6),
             child: ActionChip(
-              label: Text(short, style: const TextStyle(fontSize: 12)),
+              label: Text(
+                short,
+                style:
+                    GoogleFonts.lexend(fontSize: 12, color: AppColors.darkDeep),
+              ),
+              backgroundColor: AppColors.surfacePositive,
               onPressed: () => _applyDemoLocation(short),
             ),
           );
@@ -430,7 +467,7 @@ class _RouteScreenState extends State<RouteScreen> {
         final n = await _firebase.seedDemoBarriers();
         messenger.showSnackBar(
           SnackBar(
-            backgroundColor: AppColors.secondary,
+            backgroundColor: AppColors.success,
             content: Text(
                 '$n obstáculos de demo sembrados. Ábrelos en "Mapa de Barreras" '
                 'o calcula una ruta para verlos.'),
@@ -448,7 +485,7 @@ class _RouteScreenState extends State<RouteScreen> {
       // de fallar en silencio.
       messenger.showSnackBar(
         SnackBar(
-          backgroundColor: AppColors.danger,
+          backgroundColor: AppColors.error,
           content: Text('No se pudo completar: $e'),
           duration: const Duration(seconds: 8),
         ),
@@ -460,11 +497,11 @@ class _RouteScreenState extends State<RouteScreen> {
   Widget _buildAvoidInfoBar() {
     final rerouted = _avoidInfo!.startsWith('Ruta reencaminada') ||
         _avoidInfo!.startsWith('Evita');
-    final color = rerouted ? AppColors.secondary : AppColors.muted;
+    final color = rerouted ? AppColors.success : AppColors.brandPassive;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: color.withOpacity(0.08),
+      color: AppColors.darkMid,
       child: Row(
         children: [
           Icon(rerouted ? Icons.alt_route : Icons.info_outline,
@@ -485,23 +522,23 @@ class _RouteScreenState extends State<RouteScreen> {
   Widget _buildRouteInfoBar() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      color: AppColors.secondary.withOpacity(0.1),
+      color: AppColors.darkMid,
       child: Row(
         children: [
-          const Icon(Icons.accessible, color: AppColors.secondary, size: 20),
+          const Icon(Icons.accessible, color: AppColors.success, size: 20),
           const SizedBox(width: 8),
           Text(
             _routeInfo!,
             style: const TextStyle(
-                fontWeight: FontWeight.w600, color: AppColors.secondary),
+                fontWeight: FontWeight.w600, color: AppColors.surfacePositive),
           ),
           const Spacer(),
           const Icon(Icons.check_circle_outline,
-              color: AppColors.secondary, size: 16),
+              color: AppColors.success, size: 16),
           const SizedBox(width: 4),
           const Text(
             'Ruta peatonal',
-            style: TextStyle(fontSize: 12, color: AppColors.secondary),
+            style: TextStyle(fontSize: 12, color: AppColors.surfacePositive),
           ),
           const SizedBox(width: 8),
           IconButton(
@@ -509,7 +546,7 @@ class _RouteScreenState extends State<RouteScreen> {
             icon: Icon(
               _speaking ? Icons.stop_circle_outlined : Icons.volume_up_outlined,
             ),
-            color: AppColors.secondary,
+            color: AppColors.success,
             iconSize: 20,
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
@@ -523,15 +560,15 @@ class _RouteScreenState extends State<RouteScreen> {
   Widget _buildErrorBar() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      color: AppColors.danger.withOpacity(0.1),
+      color: AppColors.error,
       child: Row(
         children: [
-          const Icon(Icons.warning_amber, color: AppColors.danger, size: 18),
+          const Icon(Icons.warning_amber, color: Colors.white, size: 18),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               _error!,
-              style: const TextStyle(fontSize: 13, color: AppColors.danger),
+              style: const TextStyle(fontSize: 13, color: Colors.white),
             ),
           ),
         ],
