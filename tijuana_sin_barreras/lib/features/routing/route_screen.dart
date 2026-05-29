@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
@@ -33,6 +34,7 @@ class _RouteScreenState extends State<RouteScreen> {
   Set<Circle> _circles = {};
   bool _loading = false;
   bool _speaking = false;
+  bool _locatingOrigin = false;
   String? _routeInfo;
   String? _avoidInfo;
   String? _error;
@@ -42,6 +44,55 @@ class _RouteScreenState extends State<RouteScreen> {
 
   MapsService get _maps => context.read<MapsService>();
   FirebaseService get _firebase => context.read<FirebaseService>();
+
+  @override
+  void initState() {
+    super.initState();
+    _useCurrentLocationAsOrigin();
+  }
+
+  /// Al abrir la pantalla, intenta fijar el origen en la ubicación actual del
+  /// usuario. Pide permiso, obtiene las coordenadas y arma un [PlaceResult]
+  /// directo (sin geocodificación) para alimentar el cálculo de ruta. Si el
+  /// permiso se niega o falla, deja el campo vacío para que el usuario escriba.
+  Future<void> _useCurrentLocationAsOrigin() async {
+    setState(() => _locatingOrigin = true);
+    try {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        if (mounted) setState(() => _locatingOrigin = false);
+        return;
+      }
+
+      final pos = await Geolocator.getCurrentPosition();
+      if (!mounted) return;
+
+      // Si el usuario ya escribió o eligió un origen mientras se obtenía la
+      // ubicación, respetamos su elección y no la sobrescribimos.
+      if (_originPlace != null || _originCtrl.text.trim().isNotEmpty) {
+        setState(() => _locatingOrigin = false);
+        return;
+      }
+
+      final latLng = LatLng(pos.latitude, pos.longitude);
+      setState(() {
+        _originPlace = PlaceResult(
+          placeId: '',
+          name: 'Mi ubicación actual',
+          address: 'Ubicación actual',
+          latLng: latLng,
+        );
+        _originCtrl.text = 'Mi ubicación actual';
+        _locatingOrigin = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _locatingOrigin = false);
+    }
+  }
 
   /// Resuelve un extremo: usa el lugar elegido en el autocompletado; si el
   /// usuario escribió sin elegir de la lista, cae al Text Search.
@@ -347,6 +398,37 @@ class _RouteScreenState extends State<RouteScreen> {
             iconColor: AppColors.secondary,
             onSelected: (place) => setState(() => _originPlace = place),
             onCleared: () => setState(() => _originPlace = null),
+            // Si el usuario edita el texto puesto automáticamente ("Mi
+            // ubicación actual"), invalidamos el origen fijado para que valga
+            // lo que escriba o elija del autocompletado.
+            onTextChanged: (value) {
+              if (_originPlace != null && value != _originPlace!.name) {
+                setState(() => _originPlace = null);
+              }
+            },
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: _locatingOrigin ? null : _useCurrentLocationAsOrigin,
+              icon: _locatingOrigin
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.my_location, size: 18),
+              label: Text(
+                _locatingOrigin
+                    ? 'Obteniendo ubicación...'
+                    : 'Usar mi ubicación actual',
+              ),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.secondary,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 36),
+              ),
+            ),
           ),
           const SizedBox(height: 8),
           PlaceSearchField(
