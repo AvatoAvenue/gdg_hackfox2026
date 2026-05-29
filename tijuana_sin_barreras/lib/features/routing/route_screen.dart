@@ -47,7 +47,7 @@ class RouteScreen extends StatefulWidget {
 }
 
 class _RouteScreenState extends State<RouteScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   // ---------------------------------------------------------------------------
   // Route state (from original RouteScreen)
   // ---------------------------------------------------------------------------
@@ -91,6 +91,19 @@ class _RouteScreenState extends State<RouteScreen>
   late Animation<double> _pulseAnim;
   late Animation<double> _breatheAnim;
 
+  // Animated polyline draw
+  late AnimationController _drawCtrl;
+  late Animation<double> _drawAnim;
+  RouteResult? _lastResult;
+  int _drawnPointCount = 0;
+
+  // Cached endpoints for the route card bottom sheet
+  PlaceResult? _lastOrigin;
+  PlaceResult? _lastDest;
+
+  // Legend expand toggle
+  bool _legendExpanded = false;
+
   // Custom marker icon cache
   final Map<String, BitmapDescriptor> _iconCache = {};
 
@@ -125,6 +138,15 @@ class _RouteScreenState extends State<RouteScreen>
       begin: 0.977,
       end: 1.0,
     ).animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
+
+    // Polyline draw animation: traces the route from origin to destination.
+    // Duration scales with route complexity; 1 400 ms feels natural on web.
+    _drawCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    );
+    _drawAnim = CurvedAnimation(parent: _drawCtrl, curve: Curves.easeOut)
+      ..addListener(_onDrawTick);
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _listenToEmergencyAlerts(),
     );
@@ -134,9 +156,25 @@ class _RouteScreenState extends State<RouteScreen>
   void dispose() {
     _alertsSub?.cancel();
     _pulseCtrl.dispose();
+    _drawCtrl.dispose();
     _originCtrl.dispose();
     _destCtrl.dispose();
     super.dispose();
+  }
+
+  // Called on every animation frame — slices the best-route points list so
+  // the polyline "draws itself" from origin to destination.
+  void _onDrawTick() {
+    final result = _lastResult;
+    if (result == null) return;
+    final total = result.best.points.length;
+    final count = (_drawAnim.value * total).round().clamp(0, total);
+    if (count != _drawnPointCount) {
+      setState(() {
+        _drawnPointCount = count;
+        _polylines = _buildPolylines(result, drawnCount: count);
+      });
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -547,8 +585,13 @@ class _RouteScreenState extends State<RouteScreen>
 
       final points = result.best.points;
 
+      _lastResult = result;
+      _lastOrigin = origin;
+      _lastDest = dest;
+      _drawnPointCount = 0;
+
       setState(() {
-        _polylines = _buildPolylines(result);
+        _polylines = {}; // start empty — animation fills it in
         _routeMarkers = {
           Marker(
             markerId: const MarkerId('origin'),
@@ -577,6 +620,11 @@ class _RouteScreenState extends State<RouteScreen>
 
       _speakRouteInfo();
 
+      // Kick off the polyline draw animation.
+      _drawCtrl
+        ..reset()
+        ..forward();
+
       try {
         final ctrl = await _mapController.future;
         final lats = points.map((p) => p.latitude);
@@ -593,6 +641,13 @@ class _RouteScreenState extends State<RouteScreen>
         );
         await ctrl.animateCamera(CameraUpdate.newLatLngBounds(bounds, 80));
       } catch (_) {}
+
+      // Show the route card after the camera settles and the polyline starts drawing.
+      if (mounted) {
+        Future.delayed(const Duration(milliseconds: 700), () {
+          if (mounted) _showRouteSheet();
+        });
+      }
     } catch (e) {
       setState(() {
         _error = 'Error inesperado: $e';
@@ -601,9 +656,10 @@ class _RouteScreenState extends State<RouteScreen>
     }
   }
 
-  Set<Polyline> _buildPolylines(RouteResult result) {
+  Set<Polyline> _buildPolylines(RouteResult result, {int? drawnCount}) {
     final lines = <Polyline>{};
 
+    // Avoided route (original path with barriers) — always shown in full, faded.
     if (result.didReroute) {
       lines.add(
         Polyline(
@@ -616,14 +672,23 @@ class _RouteScreenState extends State<RouteScreen>
       );
     }
 
-    lines.add(
-      Polyline(
-        polylineId: const PolylineId('route_best'),
-        points: result.best.points,
-        color: AppColors.success,
-        width: 6,
-      ),
-    );
+    // Best route — sliced to drawnCount during animation, full when done.
+    final allPoints = result.best.points;
+    final visiblePoints =
+        (drawnCount != null && drawnCount < allPoints.length)
+            ? allPoints.sublist(0, drawnCount.clamp(1, allPoints.length))
+            : allPoints;
+
+    if (visiblePoints.isNotEmpty) {
+      lines.add(
+        Polyline(
+          polylineId: const PolylineId('route_best'),
+          points: visiblePoints,
+          color: AppColors.success,
+          width: 6,
+        ),
+      );
+    }
 
     return lines;
   }
@@ -689,6 +754,29 @@ class _RouteScreenState extends State<RouteScreen>
   }
 
   String _obstWord(int n) => n == 1 ? 'obstaculo' : 'obstaculos';
+
+  void _showRouteSheet() {
+    final result = _lastResult;
+    final origin = _lastOrigin;
+    final dest = _lastDest;
+    if (result == null || origin == null || dest == null) return;
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder:
+          (_) => _RouteCard(
+            result: result,
+            origin: origin,
+            dest: dest,
+            onStartNavigation: () {
+              Navigator.pop(context);
+              _speakRouteInfo();
+            },
+          ),
+    );
+  }
 
   Future<void> _speakRouteInfo() async {
     if (_routeInfo == null) return;
@@ -880,13 +968,16 @@ class _RouteScreenState extends State<RouteScreen>
   // ---------------------------------------------------------------------------
 
   Widget _buildSearchPanel() {
+    final sw = MediaQuery.sizeOf(context).width;
+    final r = (sw / 390).clamp(0.9, 1.6);
+
     return Container(
       color: AppColors.darkDeep,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+      padding: EdgeInsets.fromLTRB(16 * r, 6 * r, 16 * r, 10 * r),
       child: Column(
         children: [
           SizedBox(
-            height: 24,
+            height: 24 * r,
             child: PlaceSearchField(
               mapsService: _maps,
               controller: _originCtrl,
@@ -908,15 +999,15 @@ class _RouteScreenState extends State<RouteScreen>
               onPressed: _locatingOrigin ? null : _useCurrentLocationAsOrigin,
               icon:
                   _locatingOrigin
-                      ? const SizedBox(
-                        width: 14,
-                        height: 5,
-                        child: CircularProgressIndicator(
+                      ? SizedBox(
+                        width: 14 * r,
+                        height: 5 * r,
+                        child: const CircularProgressIndicator(
                           strokeWidth: 2,
                           color: AppColors.brandPassive,
                         ),
                       )
-                      : const Icon(Icons.my_location, size: 16),
+                      : Icon(Icons.my_location, size: 16 * r),
               label: Text(
                 _locatingOrigin
                     ? 'Obteniendo ubicación...'
@@ -924,15 +1015,15 @@ class _RouteScreenState extends State<RouteScreen>
               ),
               style: TextButton.styleFrom(
                 foregroundColor: AppColors.brandPassive,
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                minimumSize: const Size(0, 24),
-                textStyle: const TextStyle(fontSize: 12),
+                padding: EdgeInsets.symmetric(horizontal: 4 * r),
+                minimumSize: Size(0, 19 * r),
+                textStyle: TextStyle(fontSize: 10 * r),
               ),
             ),
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: 4 * r),
           SizedBox(
-            height: 24,
+            height: 24 * r,
             child: PlaceSearchField(
               mapsService: _maps,
               controller: _destCtrl,
@@ -943,11 +1034,11 @@ class _RouteScreenState extends State<RouteScreen>
               onCleared: () => setState(() => _destPlace = null),
             ),
           ),
-          const SizedBox(height: 5),
+          SizedBox(height: 5 * r),
           ElevatedButton.icon(
             onPressed: _loading ? null : _calcRoute,
             style: ElevatedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 40),
+              minimumSize: Size(double.infinity, 32 * r),
               backgroundColor: AppColors.surfaceNeutral,
               foregroundColor: AppColors.darkDeep,
               disabledBackgroundColor: AppColors.surfaceNeutral.withValues(
@@ -958,10 +1049,10 @@ class _RouteScreenState extends State<RouteScreen>
             ),
             icon:
                 _loading
-                    ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
+                    ? SizedBox(
+                      width: 18 * r,
+                      height: 18 * r,
+                      child: const CircularProgressIndicator(
                         strokeWidth: 2,
                         color: Colors.white,
                       ),
@@ -970,7 +1061,7 @@ class _RouteScreenState extends State<RouteScreen>
             label: Text(
               _loading ? 'Calculando...' : 'Calcular ruta accesible',
               style: GoogleFonts.lexend(
-                fontSize: 16,
+                fontSize: 11 * r,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -981,27 +1072,29 @@ class _RouteScreenState extends State<RouteScreen>
   }
 
   Widget _buildAvoidInfoBar() {
+    final sw = MediaQuery.sizeOf(context).width;
+    final r = (sw / 390).clamp(0.9, 1.6);
     final rerouted =
         _avoidInfo!.startsWith('Ruta reencaminada') ||
         _avoidInfo!.startsWith('Evita');
     final color = rerouted ? AppColors.success : AppColors.brandPassive;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: EdgeInsets.symmetric(horizontal: 16 * r, vertical: 5 * r),
       color: AppColors.darkMid,
       child: Row(
         children: [
           Icon(
             rerouted ? Icons.alt_route : Icons.info_outline,
             color: color,
-            size: 18,
+            size: 14 * r,
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 6 * r),
           Expanded(
             child: Text(
               _avoidInfo!,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 10 * r,
                 color: color,
                 fontWeight: FontWeight.w600,
               ),
@@ -1013,39 +1106,45 @@ class _RouteScreenState extends State<RouteScreen>
   }
 
   Widget _buildRouteInfoBar() {
+    final sw = MediaQuery.sizeOf(context).width;
+    final r = (sw / 390).clamp(0.9, 1.6);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: EdgeInsets.symmetric(horizontal: 16 * r, vertical: 8 * r),
       color: AppColors.darkMid,
       child: Row(
         children: [
-          const Icon(Icons.accessible, color: AppColors.success, size: 20),
-          const SizedBox(width: 8),
+          Icon(Icons.accessible, color: AppColors.success, size: 16 * r),
+          SizedBox(width: 6 * r),
           Text(
             _routeInfo!,
-            style: const TextStyle(
+            style: TextStyle(
+              fontSize: 10 * r,
               fontWeight: FontWeight.w600,
               color: AppColors.surfacePositive,
             ),
           ),
           const Spacer(),
-          const Icon(
+          Icon(
             Icons.check_circle_outline,
             color: AppColors.success,
-            size: 16,
+            size: 13 * r,
           ),
-          const SizedBox(width: 4),
-          const Text(
+          SizedBox(width: 3 * r),
+          Text(
             'Ruta peatonal',
-            style: TextStyle(fontSize: 12, color: AppColors.surfacePositive),
+            style: TextStyle(
+              fontSize: 10 * r,
+              color: AppColors.surfacePositive,
+            ),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 6 * r),
           IconButton(
             onPressed: _speakRouteInfo,
             icon: Icon(
               _speaking ? Icons.stop_circle_outlined : Icons.volume_up_outlined,
             ),
             color: AppColors.success,
-            iconSize: 20,
+            iconSize: 16 * r,
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
             tooltip: _speaking ? 'Detener lectura' : 'Escuchar ruta',
@@ -1194,46 +1293,61 @@ class _RouteScreenState extends State<RouteScreen>
     return Positioned(
       top: 12,
       right: 12,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: AppColors.darkMid,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: AppColors.brandPassive.withValues(alpha: 0.25),
+      child: GestureDetector(
+        onTap: () => setState(() => _legendExpanded = !_legendExpanded),
+        child: AnimatedScale(
+          scale: _legendExpanded ? 1.2 : 1.0,
+          alignment: Alignment.topRight,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutBack,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.darkMid,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: _legendExpanded
+                    ? AppColors.brandPassive.withValues(alpha: 0.6)
+                    : AppColors.brandPassive.withValues(alpha: 0.25),
+              ),
+              boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6)],
+            ),
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _LegendRow(
+                  icon: Icons.accessible_forward,
+                  color: Colors.orange,
+                  label: 'Rampa faltante',
+                ),
+                _LegendRow(
+                  icon: Icons.warning_rounded,
+                  color: Colors.red,
+                  label: 'Banqueta danada',
+                ),
+                _LegendRow(
+                  icon: Icons.traffic,
+                  color: Colors.purple,
+                  label: 'Semaforo',
+                ),
+                _LegendRow(
+                  icon: Icons.report_problem_rounded,
+                  color: Colors.amber,
+                  label: 'Otro',
+                ),
+                _LegendRow(
+                  icon: Icons.check_circle_outline,
+                  color: Colors.green,
+                  label: 'Resuelto',
+                ),
+                _LegendRow(
+                  icon: Icons.sos,
+                  color: AppColors.error,
+                  label: 'SOS',
+                ),
+              ],
+            ),
           ),
-          boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6)],
-        ),
-        child: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _LegendRow(
-              icon: Icons.accessible_forward,
-              color: Colors.orange,
-              label: 'Rampa faltante',
-            ),
-            _LegendRow(
-              icon: Icons.warning_rounded,
-              color: Colors.red,
-              label: 'Banqueta danada',
-            ),
-            _LegendRow(
-              icon: Icons.traffic,
-              color: Colors.purple,
-              label: 'Semaforo',
-            ),
-            _LegendRow(
-              icon: Icons.report_problem_rounded,
-              color: Colors.amber,
-              label: 'Otro',
-            ),
-            _LegendRow(
-              icon: Icons.check_circle_outline,
-              color: Colors.green,
-              label: 'Resuelto',
-            ),
-            _LegendRow(icon: Icons.sos, color: AppColors.error, label: 'SOS'),
-          ],
         ),
       ),
     );
@@ -1534,6 +1648,278 @@ class _SosSheet extends StatelessWidget {
             style: TextStyle(
               color: AppColors.surfacePositive.withValues(alpha: 0.8),
               fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Route card — DraggableScrollableSheet that slides up after route calculation
+// ---------------------------------------------------------------------------
+
+class _RouteStep {
+  final IconData icon;
+  final String label;
+  final String detail;
+  final Color color;
+  const _RouteStep(this.icon, this.label, this.detail, this.color);
+}
+
+class _RouteCard extends StatelessWidget {
+  final RouteResult result;
+  final PlaceResult origin;
+  final PlaceResult dest;
+  final VoidCallback onStartNavigation;
+
+  const _RouteCard({
+    required this.result,
+    required this.origin,
+    required this.dest,
+    required this.onStartNavigation,
+  });
+
+  List<_RouteStep> _buildSteps() {
+    final steps = <_RouteStep>[
+      _RouteStep(Icons.my_location, 'Inicio', origin.name, AppColors.success),
+    ];
+
+    for (final b in result.remainingBarriers) {
+      steps.add(
+        _RouteStep(
+          Icons.warning_rounded,
+          b.type,
+          'Precaución en la ruta',
+          AppColors.warning,
+        ),
+      );
+    }
+
+    if (result.didReroute) {
+      final n = result.avoidedBarriers.length;
+      steps.add(
+        _RouteStep(
+          Icons.alt_route,
+          'Desvío aplicado',
+          'Se evitaron $n ${n == 1 ? "barrera" : "barreras"}',
+          AppColors.brandActive,
+        ),
+      );
+    }
+
+    steps.add(
+      _RouteStep(Icons.flag_rounded, 'Destino', dest.name, AppColors.error),
+    );
+    return steps;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sw = MediaQuery.sizeOf(context).width;
+    final r = (sw / 390).clamp(0.9, 1.6);
+    final steps = _buildSteps();
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.45,
+      minChildSize: 0.20,
+      maxChildSize: 0.88,
+      snap: true,
+      snapSizes: const [0.20, 0.45, 0.88],
+      builder:
+          (_, scrollCtrl) => Container(
+            decoration: BoxDecoration(
+              color: AppColors.darkMid,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(20),
+              ),
+              border: Border(
+                top: BorderSide(
+                  color: AppColors.brandPassive.withValues(alpha: 0.30),
+                ),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.40),
+                  blurRadius: 24,
+                  offset: const Offset(0, -4),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                // ── Drag handle ───────────────────────────────────────────────
+                Container(
+                  margin: EdgeInsets.symmetric(vertical: 10 * r),
+                  width: 40 * r,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.brandPassive.withValues(alpha: 0.40),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+
+                // ── Summary row ───────────────────────────────────────────────
+                Padding(
+                  padding: EdgeInsets.fromLTRB(20 * r, 4 * r, 16 * r, 14 * r),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.accessible_forward,
+                        color: AppColors.success,
+                        size: 26 * r,
+                      ),
+                      SizedBox(width: 12 * r),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${result.best.distanceKm.toStringAsFixed(1)} km  ·  ~${result.best.durationMinutes} min',
+                              style: GoogleFonts.lexend(
+                                fontSize: 17 * r,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.surfacePositive,
+                              ),
+                            ),
+                            if (result.didReroute)
+                              Text(
+                                '${result.avoidedBarriers.length} barrera(s) evitada(s)',
+                                style: GoogleFonts.lexend(
+                                  fontSize: 12 * r,
+                                  color: AppColors.success,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(width: 8 * r),
+                      FilledButton.icon(
+                        onPressed: onStartNavigation,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.brandHover,
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 14 * r,
+                            vertical: 10 * r,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        icon: Icon(Icons.navigation_rounded, size: 16 * r),
+                        label: Text(
+                          'Iniciar',
+                          style: GoogleFonts.lexend(
+                            fontSize: 13 * r,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const Divider(
+                  color: AppColors.darkDeep,
+                  height: 1,
+                  thickness: 1,
+                ),
+
+                // ── Step list ─────────────────────────────────────────────────
+                Expanded(
+                  child: ListView.builder(
+                    controller: scrollCtrl,
+                    padding: EdgeInsets.symmetric(vertical: 8 * r),
+                    itemCount: steps.length,
+                    itemBuilder:
+                        (_, i) => _StepTile(
+                          step: steps[i],
+                          isLast: i == steps.length - 1,
+                          r: r,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+    );
+  }
+}
+
+class _StepTile extends StatelessWidget {
+  final _RouteStep step;
+  final bool isLast;
+  final double r;
+
+  const _StepTile({required this.step, this.isLast = false, this.r = 1.0});
+
+  @override
+  Widget build(BuildContext context) {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Timeline column ─────────────────────────────────────────────
+          SizedBox(
+            width: 64 * r,
+            child: Column(
+              children: [
+                SizedBox(height: 14 * r),
+                Container(
+                  width: 32 * r,
+                  height: 32 * r,
+                  decoration: BoxDecoration(
+                    color: step.color.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(step.icon, color: step.color, size: 16 * r),
+                ),
+                if (!isLast)
+                  Expanded(
+                    child: Container(
+                      width: 2,
+                      margin: EdgeInsets.symmetric(vertical: 4 * r),
+                      color: AppColors.darkDeep,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+          // ── Content ─────────────────────────────────────────────────────
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(
+                right: 20 * r,
+                top: 14 * r,
+                bottom: 14 * r,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    step.label,
+                    style: GoogleFonts.lexend(
+                      fontSize: 13 * r,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.surfacePositive,
+                    ),
+                  ),
+                  SizedBox(height: 2 * r),
+                  Text(
+                    step.detail,
+                    style: GoogleFonts.lexend(
+                      fontSize: 12 * r,
+                      color: AppColors.surfacePositive.withValues(alpha: 0.65),
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
             ),
           ),
         ],
