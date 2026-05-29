@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -150,10 +150,10 @@ class FirebaseService {
         .map((snap) => snap.docs.map(BarrierReport.fromFirestore).toList());
   }
 
-  Future<String> uploadBarrierPhoto(File photo) async {
+  Future<String> uploadBarrierPhoto(Uint8List bytes) async {
     final id = _uuid.v4();
     final ref = _storage.ref('barriers/$id.jpg');
-    await ref.putFile(photo, SettableMetadata(contentType: 'image/jpeg'));
+    await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
     return ref.getDownloadURL();
   }
 

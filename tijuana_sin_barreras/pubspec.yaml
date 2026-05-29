@@ -41,6 +41,12 @@ dependencies:
   # Environment variables (.env)
   flutter_dotenv: ^5.1.0
 
+  # Fonts
+  google_fonts: ^6.2.1
+
+  # SVG (used for optional vector logo asset)
+  flutter_svg: ^2.0.10
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
