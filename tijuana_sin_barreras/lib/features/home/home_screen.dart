@@ -47,17 +47,18 @@ class HomeScreen extends StatelessWidget {
       children: [
         Text(
           'Movilidad\naccesible para todos',
-          style: Theme.of(context)
-              .textTheme
-              .headlineLarge
-              ?.copyWith(height: 1, fontSize: 42, fontWeight: FontWeight.w800),
+          style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+            height: 1,
+            fontSize: 42,
+            fontWeight: FontWeight.w800,
+          ),
         ),
         const SizedBox(height: 12),
         Text(
           'Navega Tijuana sin obstáculos. Reporta barreras y ayuda a tu comunidad.',
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: AppColors.muted,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyLarge?.copyWith(color: AppColors.muted),
         ),
       ],
     );
@@ -206,7 +207,17 @@ class _MainBarState extends State<_MainBar> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               // ── Brand ──────────────────────────────────────────────────
-              const AppLogo(size: 56),
+              const AppLogo(size: 36),
+              const SizedBox(width: 10),
+              Text(
+                'Senda',
+                style: GoogleFonts.lexend(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.brandPassive,
+                  letterSpacing: -0.5,
+                ),
+              ),
               const Spacer(),
               // ── Nav items with dock magnification ──────────────────────
               if (showNav) ...[
@@ -223,13 +234,14 @@ class _MainBarState extends State<_MainBar> {
                       popupBody: navDefs[i].popupBody,
                       icon: navDefs[i].icon,
                       accentColor: navDefs[i].accentColor,
-                      onHoverChange: (hovered) => setState(() {
-                        if (hovered) {
-                          _hoveredIndex = i;
-                        } else if (_hoveredIndex == i) {
-                          _hoveredIndex = -1;
-                        }
-                      }),
+                      onHoverChange:
+                          (hovered) => setState(() {
+                            if (hovered) {
+                              _hoveredIndex = i;
+                            } else if (_hoveredIndex == i) {
+                              _hoveredIndex = -1;
+                            }
+                          }),
                     ),
                   ),
                 ],
@@ -260,10 +272,11 @@ class _AuthButton extends StatelessWidget {
           label: signedIn ? 'Mi perfil' : 'Iniciar sesión',
           button: true,
           child: IconButton(
-            onPressed: () => Navigator.pushNamed(
-              context,
-              signedIn ? '/profile' : '/login',
-            ),
+            onPressed:
+                () => Navigator.pushNamed(
+                  context,
+                  signedIn ? '/profile' : '/login',
+                ),
             icon: Icon(
               signedIn ? Icons.account_circle : Icons.login,
               color: AppColors.brandPassive,
@@ -328,13 +341,14 @@ class _NavItemState extends State<_NavItem> {
       link: _layerLink,
       child: OverlayPortal(
         controller: _portalController,
-        overlayChildBuilder: (_) => _NavPopup(
-          layerLink: _layerLink,
-          icon: widget.icon,
-          title: widget.popupTitle,
-          body: widget.popupBody,
-          accentColor: widget.accentColor,
-        ),
+        overlayChildBuilder:
+            (_) => _NavPopup(
+              layerLink: _layerLink,
+              icon: widget.icon,
+              title: widget.popupTitle,
+              body: widget.popupBody,
+              accentColor: widget.accentColor,
+            ),
         child: MouseRegion(
           onEnter: (_) => _onEnter(),
           onExit: (_) => _onExit(),
@@ -346,23 +360,27 @@ class _NavItemState extends State<_NavItem> {
               curve: Curves.easeInOut,
               padding: const EdgeInsets.symmetric(horizontal: 45, vertical: 8),
               decoration: BoxDecoration(
-                color: _hovered
-                    ? AppColors.darkDeep.withValues(alpha: 0.16)
-                    : Colors.transparent,
+                color:
+                    _hovered
+                        ? AppColors.darkDeep.withValues(alpha: 0.16)
+                        : Colors.transparent,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
                   color: _hovered ? AppColors.brandPassive : Colors.transparent,
                   width: 1.5,
                 ),
-                boxShadow: _hovered
-                    ? [
-                        BoxShadow(
-                          color: AppColors.brandPassive.withValues(alpha: 0.25),
-                          blurRadius: 22,
-                          spreadRadius: 3,
-                        ),
-                      ]
-                    : [],
+                boxShadow:
+                    _hovered
+                        ? [
+                          BoxShadow(
+                            color: AppColors.brandPassive.withValues(
+                              alpha: 0.25,
+                            ),
+                            blurRadius: 22,
+                            spreadRadius: 3,
+                          ),
+                        ]
+                        : [],
               ),
               child: AnimatedDefaultTextStyle(
                 duration: const Duration(milliseconds: 160),
@@ -411,14 +429,15 @@ class _NavPopup extends StatelessWidget {
         tween: Tween(begin: 0.0, end: 1.0),
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutBack,
-        builder: (_, v, child) => Opacity(
-          opacity: v.clamp(0.0, 1.0),
-          child: Transform.scale(
-            scale: 0.88 + 0.12 * v,
-            alignment: Alignment.topLeft,
-            child: child,
-          ),
-        ),
+        builder:
+            (_, v, child) => Opacity(
+              opacity: v.clamp(0.0, 1.0),
+              child: Transform.scale(
+                scale: 0.88 + 0.12 * v,
+                alignment: Alignment.topLeft,
+                child: child,
+              ),
+            ),
         // IntrinsicWidth shrinks the popup to its content width.
         // Align + IntrinsicWidth together prevent the Material from
         // expanding to fill the full-screen Overlay.
@@ -428,8 +447,10 @@ class _NavPopup extends StatelessWidget {
             child: Material(
               color: Colors.transparent,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.darkMid,
                   borderRadius: BorderRadius.circular(8),
@@ -538,15 +559,15 @@ class _ActionCard extends StatelessWidget {
                 Text(
                   title,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: AppColors.surfacePositive,
-                      ),
+                    color: AppColors.surfacePositive,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   subtitle,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppColors.surfacePositive.withOpacity(0.65),
-                      ),
+                    color: AppColors.surfacePositive.withOpacity(0.65),
+                  ),
                 ),
               ],
             ),

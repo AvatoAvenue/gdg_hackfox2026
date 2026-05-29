@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:ui' as ui;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
+import 'package:tijuana_sin_barreras/shared/widgets/app_logo_2.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/models/barrier_report.dart';
@@ -72,7 +74,10 @@ class _RouteScreenState extends State<RouteScreen>
   Set<Marker> _emergencyMarkers = {};
   BarrierReport? _selectedBarrier;
   EmergencyAlert? _selectedEmergency;
-  LatLng _center = const LatLng(AppConstants.tijuanaLat, AppConstants.tijuanaLng);
+  LatLng _center = const LatLng(
+    AppConstants.tijuanaLat,
+    AppConstants.tijuanaLng,
+  );
   LatLng? _userPosition;
   String? _activeAlertId;
   bool _sendingAlert = false;
@@ -92,10 +97,10 @@ class _RouteScreenState extends State<RouteScreen>
   FirebaseService get _firebase => context.read<FirebaseService>();
 
   Set<Marker> get _allMarkers => {
-        ..._routeMarkers,
-        ..._barrierMapMarkers,
-        ..._emergencyMarkers,
-      };
+    ..._routeMarkers,
+    ..._barrierMapMarkers,
+    ..._emergencyMarkers,
+  };
 
   // ---------------------------------------------------------------------------
   // Lifecycle
@@ -111,14 +116,17 @@ class _RouteScreenState extends State<RouteScreen>
       vsync: this,
       duration: const Duration(milliseconds: 800),
     )..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 0.92, end: 1.0).animate(
-      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
+    _pulseAnim = Tween<double>(
+      begin: 0.92,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
+    _breatheAnim = Tween<double>(
+      begin: 0.977,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _listenToEmergencyAlerts(),
     );
-    _breatheAnim = Tween<double>(begin: 0.977, end: 1.0).animate(
-      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
-    );
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => _listenToEmergencyAlerts());
   }
 
   @override
@@ -159,20 +167,23 @@ class _RouteScreenState extends State<RouteScreen>
       size / 2,
       Paint()..color = bg,
     );
-    final tp = TextPainter(textDirection: TextDirection.ltr)
-      ..text = TextSpan(
-        text: String.fromCharCode(icon.codePoint),
-        style: TextStyle(
-          fontSize: 26,
-          fontFamily: icon.fontFamily,
-          package: icon.fontPackage,
-          color: Colors.white,
-        ),
-      )
-      ..layout();
+    final tp =
+        TextPainter(textDirection: TextDirection.ltr)
+          ..text = TextSpan(
+            text: String.fromCharCode(icon.codePoint),
+            style: TextStyle(
+              fontSize: 26,
+              fontFamily: icon.fontFamily,
+              package: icon.fontPackage,
+              color: Colors.white,
+            ),
+          )
+          ..layout();
     tp.paint(canvas, Offset((size - tp.width) / 2, (size - tp.height) / 2));
-    final image =
-        await recorder.endRecording().toImage(size.toInt(), size.toInt());
+    final image = await recorder.endRecording().toImage(
+      size.toInt(),
+      size.toInt(),
+    );
     final data = await image.toByteData(format: ui.ImageByteFormat.png);
     return BitmapDescriptor.bytes(data!.buffer.asUint8List());
   }
@@ -236,15 +247,19 @@ class _RouteScreenState extends State<RouteScreen>
     _alertsSub = firebase.getActiveEmergencyAlerts().listen((alerts) {
       if (!mounted) return;
 
-      final markers = alerts
-          .map((a) => Marker(
-                markerId: MarkerId('sos_${a.id}'),
-                position: LatLng(a.lat, a.lng),
-                icon: BitmapDescriptor.defaultMarkerWithHue(
-                    BitmapDescriptor.hueRed),
-                onTap: () => setState(() => _selectedEmergency = a),
-              ))
-          .toSet();
+      final markers =
+          alerts
+              .map(
+                (a) => Marker(
+                  markerId: MarkerId('sos_${a.id}'),
+                  position: LatLng(a.lat, a.lng),
+                  icon: BitmapDescriptor.defaultMarkerWithHue(
+                    BitmapDescriptor.hueRed,
+                  ),
+                  onTap: () => setState(() => _selectedEmergency = a),
+                ),
+              )
+              .toSet();
 
       setState(() => _emergencyMarkers = markers);
 
@@ -272,33 +287,34 @@ class _RouteScreenState extends State<RouteScreen>
   Future<void> _confirmSendAlert() async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.sos, color: AppColors.error, size: 28),
-            SizedBox(width: 8),
-            Text('Enviar Alerta SOS'),
-          ],
-        ),
-        content: const Text(
-          'Necesitas ayuda de emergencia?\n\n'
-          'Las personas con la app cercanas a tu ubicacion seran notificadas de inmediato.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.error,
-              foregroundColor: Colors.white,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.sos, color: AppColors.error, size: 28),
+                SizedBox(width: 8),
+                Text('Enviar Alerta SOS'),
+              ],
             ),
-            child: Text('Enviar SOS', style: GoogleFonts.lexend()),
+            content: const Text(
+              'Necesitas ayuda de emergencia?\n\n'
+              'Las personas con la app cercanas a tu ubicacion seran notificadas de inmediato.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.error,
+                  foregroundColor: Colors.white,
+                ),
+                child: Text('Enviar SOS', style: GoogleFonts.lexend()),
+              ),
+            ],
           ),
-        ],
-      ),
     );
     if (confirm != true || !mounted) return;
     await _sendEmergencyAlert();
@@ -373,43 +389,44 @@ class _RouteScreenState extends State<RouteScreen>
     _dialogVisible = true;
 
     context.read<TtsService>().speak(
-          'Alerta de emergencia. '
-          'Hay una persona que necesita ayuda a $distMeters metros de ti.',
-        );
+      'Alerta de emergencia. '
+      'Hay una persona que necesita ayuda a $distMeters metros de ti.',
+    );
 
     showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.warning_rounded, color: AppColors.error, size: 28),
-            SizedBox(width: 8),
-            Text('Emergencia cercana!'),
-          ],
-        ),
-        content: Text(
-          'Hay una persona que necesita ayuda a $distMeters m de tu ubicacion.\n\n'
-          'Puedes acercarte a ayudar?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('No puedo'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _moveCameraToAlert(alert);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.error,
-              foregroundColor: Colors.white,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.warning_rounded, color: AppColors.error, size: 28),
+                SizedBox(width: 8),
+                Text('Emergencia cercana!'),
+              ],
             ),
-            child: const Text('Ir a ayudar'),
+            content: Text(
+              'Hay una persona que necesita ayuda a $distMeters m de tu ubicacion.\n\n'
+              'Puedes acercarte a ayudar?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('No puedo'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _moveCameraToAlert(alert);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.error,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Ir a ayudar'),
+              ),
+            ],
           ),
-        ],
-      ),
     ).whenComplete(() => _dialogVisible = false);
   }
 
@@ -536,14 +553,16 @@ class _RouteScreenState extends State<RouteScreen>
             markerId: const MarkerId('origin'),
             position: origin.latLng,
             icon: BitmapDescriptor.defaultMarkerWithHue(
-                BitmapDescriptor.hueGreen),
+              BitmapDescriptor.hueGreen,
+            ),
             infoWindow: InfoWindow(title: 'Inicio: ${origin.name}'),
           ),
           Marker(
             markerId: const MarkerId('dest'),
             position: dest.latLng,
-            icon:
-                BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+              BitmapDescriptor.hueRed,
+            ),
             infoWindow: InfoWindow(title: 'Destino: ${dest.name}'),
           ),
           ..._buildRouteBarrierMarkers(result),
@@ -585,21 +604,25 @@ class _RouteScreenState extends State<RouteScreen>
     final lines = <Polyline>{};
 
     if (result.didReroute) {
-      lines.add(Polyline(
-        polylineId: const PolylineId('route_default'),
-        points: result.defaultOption.points,
-        color: AppColors.brandPassive.withValues(alpha: 0.5),
-        width: 4,
-        patterns: [PatternItem.dash(20), PatternItem.gap(12)],
-      ));
+      lines.add(
+        Polyline(
+          polylineId: const PolylineId('route_default'),
+          points: result.defaultOption.points,
+          color: AppColors.brandPassive.withValues(alpha: 0.5),
+          width: 4,
+          patterns: [PatternItem.dash(20), PatternItem.gap(12)],
+        ),
+      );
     }
 
-    lines.add(Polyline(
-      polylineId: const PolylineId('route_best'),
-      points: result.best.points,
-      color: AppColors.success,
-      width: 6,
-    ));
+    lines.add(
+      Polyline(
+        polylineId: const PolylineId('route_best'),
+        points: result.best.points,
+        color: AppColors.success,
+        width: 6,
+      ),
+    );
 
     return lines;
   }
@@ -681,26 +704,6 @@ class _RouteScreenState extends State<RouteScreen>
     if (mounted) setState(() => _speaking = false);
   }
 
-  // ---------------------------------------------------------------------------
-  // Demo menu helpers (from original RouteScreen)
-  // ---------------------------------------------------------------------------
-
-  Future<void> _applyDemoLocation(String short) async {
-    final isOrigin = _originCtrl.text.isEmpty;
-    final ctrl = isOrigin ? _originCtrl : _destCtrl;
-    ctrl.text = short;
-
-    final result = await _maps.searchText('$short Tijuana');
-    if (result == null) return;
-    setState(() {
-      if (isOrigin) {
-        _originPlace = result;
-      } else {
-        _destPlace = result;
-      }
-    });
-  }
-
   Future<void> _onDemoMenu(String action) async {
     final messenger = ScaffoldMessenger.of(context);
     messenger.showSnackBar(
@@ -713,8 +716,9 @@ class _RouteScreenState extends State<RouteScreen>
           SnackBar(
             backgroundColor: AppColors.success,
             content: Text(
-                '$n obstaculos de demo sembrados. Abrelos en el mapa '
-                'o calcula una ruta para verlos.'),
+              '$n obstaculos de demo sembrados. Abrelos en el mapa '
+              'o calcula una ruta para verlos.',
+            ),
             duration: const Duration(seconds: 4),
           ),
         );
@@ -744,7 +748,17 @@ class _RouteScreenState extends State<RouteScreen>
     final firebase = context.read<FirebaseService>();
     return Scaffold(
       appBar: AppBar(
-        title: Text('Senda', style: GoogleFonts.lexend()),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const AppLogo2(size: 48),
+            const SizedBox(width: 8),
+            Text(
+              'Senda',
+              style: GoogleFonts.lexend(color: AppColors.brandPassive),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.my_location),
@@ -755,25 +769,27 @@ class _RouteScreenState extends State<RouteScreen>
             tooltip: 'Datos de demo',
             icon: const Icon(Icons.science_outlined),
             onSelected: _onDemoMenu,
-            itemBuilder: (_) => const [
-              PopupMenuItem(
-                value: 'seed',
-                child: ListTile(
-                  leading: Icon(Icons.add_location_alt_outlined),
-                  title: Text('Sembrar obstaculos demo'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              PopupMenuItem(
-                value: 'clear',
-                child: ListTile(
-                  leading: Icon(Icons.delete_sweep_outlined),
-                  title: Text('Borrar obstaculos demo'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-            ],
+            itemBuilder:
+                (_) => const [
+                  PopupMenuItem(
+                    value: 'seed',
+                    child: ListTile(
+                      leading: Icon(Icons.add_location_alt_outlined),
+                      title: Text('Sembrar obstaculos demo'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'clear',
+                    child: ListTile(
+                      leading: Icon(Icons.delete_sweep_outlined),
+                      title: Text('Borrar obstaculos demo'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ],
           ),
+          const _AuthButton(),
         ],
       ),
       body: StreamBuilder<List<BarrierReport>>(
@@ -792,8 +808,10 @@ class _RouteScreenState extends State<RouteScreen>
                 child: Stack(
                   children: [
                     GoogleMap(
-                      initialCameraPosition:
-                          CameraPosition(target: _center, zoom: 13),
+                      initialCameraPosition: CameraPosition(
+                        target: _center,
+                        zoom: 13,
+                      ),
                       onMapCreated: _mapController.complete,
                       style: _kMapStyle,
                       markers: _allMarkers,
@@ -802,10 +820,11 @@ class _RouteScreenState extends State<RouteScreen>
                       myLocationEnabled: true,
                       myLocationButtonEnabled: false,
                       zoomControlsEnabled: false,
-                      onTap: (_) => setState(() {
-                        _selectedBarrier = null;
-                        _selectedEmergency = null;
-                      }),
+                      onTap:
+                          (_) => setState(() {
+                            _selectedBarrier = null;
+                            _selectedEmergency = null;
+                          }),
                     ),
                     _buildLegend(),
                     if (snap.connectionState == ConnectionState.waiting)
@@ -815,8 +834,8 @@ class _RouteScreenState extends State<RouteScreen>
                         alignment: Alignment.bottomCenter,
                         child: _BarrierSheet(
                           barrier: _selectedBarrier!,
-                          onClose: () =>
-                              setState(() => _selectedBarrier = null),
+                          onClose:
+                              () => setState(() => _selectedBarrier = null),
                         ),
                       ),
                     if (_selectedEmergency != null)
@@ -824,8 +843,8 @@ class _RouteScreenState extends State<RouteScreen>
                         alignment: Alignment.bottomCenter,
                         child: _SosSheet(
                           alert: _selectedEmergency!,
-                          onClose: () =>
-                              setState(() => _selectedEmergency = null),
+                          onClose:
+                              () => setState(() => _selectedEmergency = null),
                         ),
                       ),
                   ],
@@ -865,74 +884,88 @@ class _RouteScreenState extends State<RouteScreen>
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
       child: Column(
         children: [
-          PlaceSearchField(
-            mapsService: _maps,
-            controller: _originCtrl,
-            hintText: 'Origen  (ej. Centro Cívico)',
-            icon: Icons.trip_origin,
-            iconColor: AppColors.success,
-            onSelected: (place) => setState(() => _originPlace = place),
-            onCleared: () => setState(() => _originPlace = null),
-            onTextChanged: (value) {
-              if (_originPlace != null && value != _originPlace!.name) {
-                setState(() => _originPlace = null);
-              }
-            },
+          SizedBox(
+            height: 24,
+            child: PlaceSearchField(
+              mapsService: _maps,
+              controller: _originCtrl,
+              hintText: 'Origen  (ej. Centro Cívico)',
+              icon: Icons.trip_origin,
+              iconColor: AppColors.success,
+              onSelected: (place) => setState(() => _originPlace = place),
+              onCleared: () => setState(() => _originPlace = null),
+              onTextChanged: (value) {
+                if (_originPlace != null && value != _originPlace!.name) {
+                  setState(() => _originPlace = null);
+                }
+              },
+            ),
           ),
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
               onPressed: _locatingOrigin ? null : _useCurrentLocationAsOrigin,
-              icon: _locatingOrigin
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.brandPassive),
-                    )
-                  : const Icon(Icons.my_location, size: 16),
+              icon:
+                  _locatingOrigin
+                      ? const SizedBox(
+                        width: 14,
+                        height: 5,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.brandPassive,
+                        ),
+                      )
+                      : const Icon(Icons.my_location, size: 16),
               label: Text(
-                _locatingOrigin ? 'Obteniendo ubicación...' : 'Usar mi ubicación',
+                _locatingOrigin
+                    ? 'Obteniendo ubicación...'
+                    : 'Usar mi ubicación',
               ),
               style: TextButton.styleFrom(
                 foregroundColor: AppColors.brandPassive,
                 padding: const EdgeInsets.symmetric(horizontal: 4),
-                minimumSize: const Size(0, 32),
+                minimumSize: const Size(0, 24),
                 textStyle: const TextStyle(fontSize: 12),
               ),
             ),
           ),
           const SizedBox(height: 4),
-          PlaceSearchField(
-            mapsService: _maps,
-            controller: _destCtrl,
-            hintText: 'Destino  (ej. Hospital General)',
-            icon: Icons.location_on,
-            iconColor: AppColors.error,
-            onSelected: (place) => setState(() => _destPlace = place),
-            onCleared: () => setState(() => _destPlace = null),
+          SizedBox(
+            height: 24,
+            child: PlaceSearchField(
+              mapsService: _maps,
+              controller: _destCtrl,
+              hintText: 'Destino  (ej. Hospital General)',
+              icon: Icons.location_on,
+              iconColor: AppColors.error,
+              onSelected: (place) => setState(() => _destPlace = place),
+              onCleared: () => setState(() => _destPlace = null),
+            ),
           ),
-          const SizedBox(height: 12),
-          _buildDemoChips(),
-          const SizedBox(height: 12),
+          const SizedBox(height: 5),
           ElevatedButton.icon(
             onPressed: _loading ? null : _calcRoute,
             style: ElevatedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 50),
+              minimumSize: const Size(double.infinity, 40),
               backgroundColor: AppColors.surfaceNeutral,
               foregroundColor: AppColors.darkDeep,
-              disabledBackgroundColor:
-                  AppColors.surfaceNeutral.withValues(alpha: 0.45),
+              disabledBackgroundColor: AppColors.surfaceNeutral.withValues(
+                alpha: 0.45,
+              ),
               disabledForegroundColor: Colors.white.withValues(alpha: 0.6),
               side: const BorderSide(color: AppColors.brandPassive, width: 1),
             ),
-            icon: _loading
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
-                  )
-                : const Icon(Icons.alt_route),
+            icon:
+                _loading
+                    ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                    : const Icon(Icons.alt_route),
             label: Text(
               _loading ? 'Calculando...' : 'Calcular ruta accesible',
               style: GoogleFonts.lexend(
@@ -946,31 +979,9 @@ class _RouteScreenState extends State<RouteScreen>
     );
   }
 
-  Widget _buildDemoChips() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: AppConstants.demoLocations.map((loc) {
-          final short = loc.split(',').first;
-          return Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: ActionChip(
-              label: Text(
-                short,
-                style:
-                    GoogleFonts.lexend(fontSize: 12, color: AppColors.darkDeep),
-              ),
-              backgroundColor: AppColors.surfacePositive,
-              onPressed: () => _applyDemoLocation(short),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
   Widget _buildAvoidInfoBar() {
-    final rerouted = _avoidInfo!.startsWith('Ruta reencaminada') ||
+    final rerouted =
+        _avoidInfo!.startsWith('Ruta reencaminada') ||
         _avoidInfo!.startsWith('Evita');
     final color = rerouted ? AppColors.success : AppColors.brandPassive;
     return Container(
@@ -979,14 +990,20 @@ class _RouteScreenState extends State<RouteScreen>
       color: AppColors.darkMid,
       child: Row(
         children: [
-          Icon(rerouted ? Icons.alt_route : Icons.info_outline,
-              color: color, size: 18),
+          Icon(
+            rerouted ? Icons.alt_route : Icons.info_outline,
+            color: color,
+            size: 18,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               _avoidInfo!,
               style: TextStyle(
-                  fontSize: 13, color: color, fontWeight: FontWeight.w600),
+                fontSize: 12,
+                color: color,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -1005,11 +1022,16 @@ class _RouteScreenState extends State<RouteScreen>
           Text(
             _routeInfo!,
             style: const TextStyle(
-                fontWeight: FontWeight.w600, color: AppColors.surfacePositive),
+              fontWeight: FontWeight.w600,
+              color: AppColors.surfacePositive,
+            ),
           ),
           const Spacer(),
-          const Icon(Icons.check_circle_outline,
-              color: AppColors.success, size: 16),
+          const Icon(
+            Icons.check_circle_outline,
+            color: AppColors.success,
+            size: 16,
+          ),
           const SizedBox(width: 4),
           const Text(
             'Ruta peatonal',
@@ -1060,19 +1082,22 @@ class _RouteScreenState extends State<RouteScreen>
 
     return AnimatedBuilder(
       animation: isActive ? _pulseAnim : _breatheAnim,
-      builder: (context, child) => Transform.scale(
-        scale: isActive ? _pulseAnim.value : _breatheAnim.value,
-        child: child,
-      ),
+      builder:
+          (context, child) => Transform.scale(
+            scale: isActive ? _pulseAnim.value : _breatheAnim.value,
+            child: child,
+          ),
       child: Semantics(
-        label: isActive
-            ? 'Cancelar alerta de emergencia activa'
-            : 'Boton SOS: pedir ayuda de emergencia',
+        label:
+            isActive
+                ? 'Cancelar alerta de emergencia activa'
+                : 'Boton SOS: pedir ayuda de emergencia',
         button: true,
         child: GestureDetector(
-          onTap: isActive
-              ? _cancelEmergencyAlert
-              : (_sendingAlert ? null : _confirmSendAlert),
+          onTap:
+              isActive
+                  ? _cancelEmergencyAlert
+                  : (_sendingAlert ? null : _confirmSendAlert),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 350),
             curve: Curves.easeInOut,
@@ -1080,9 +1105,10 @@ class _RouteScreenState extends State<RouteScreen>
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: isActive
-                    ? [const Color(0xFFFFB300), const Color(0xFFFF8F00)]
-                    : [const Color(0xFFFF6D00), const Color(0xFFE64A19)],
+                colors:
+                    isActive
+                        ? [const Color(0xFFFFB300), const Color(0xFFFF8F00)]
+                        : [const Color(0xFFFF6D00), const Color(0xFFE64A19)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -1110,18 +1136,18 @@ class _RouteScreenState extends State<RouteScreen>
               children: [
                 _sendingAlert
                     ? const SizedBox(
-                        width: 30,
-                        height: 30,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2.5),
-                      )
-                    : Icon(
-                        isActive
-                            ? Icons.cancel_outlined
-                            : Icons.warning_rounded,
+                      width: 30,
+                      height: 30,
+                      child: CircularProgressIndicator(
                         color: Colors.white,
-                        size: 32,
+                        strokeWidth: 2.5,
                       ),
+                    )
+                    : Icon(
+                      isActive ? Icons.cancel_outlined : Icons.warning_rounded,
+                      color: Colors.white,
+                      size: 32,
+                    ),
                 const SizedBox(width: 11),
                 Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1172,31 +1198,39 @@ class _RouteScreenState extends State<RouteScreen>
         decoration: BoxDecoration(
           color: AppColors.darkMid,
           borderRadius: BorderRadius.circular(10),
-          border:
-              Border.all(color: AppColors.brandPassive.withValues(alpha: 0.25)),
+          border: Border.all(
+            color: AppColors.brandPassive.withValues(alpha: 0.25),
+          ),
           boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6)],
         ),
         child: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _LegendRow(
-                icon: Icons.accessible_forward,
-                color: Colors.orange,
-                label: 'Rampa faltante'),
+              icon: Icons.accessible_forward,
+              color: Colors.orange,
+              label: 'Rampa faltante',
+            ),
             _LegendRow(
-                icon: Icons.warning_rounded,
-                color: Colors.red,
-                label: 'Banqueta danada'),
+              icon: Icons.warning_rounded,
+              color: Colors.red,
+              label: 'Banqueta danada',
+            ),
             _LegendRow(
-                icon: Icons.traffic, color: Colors.purple, label: 'Semaforo'),
+              icon: Icons.traffic,
+              color: Colors.purple,
+              label: 'Semaforo',
+            ),
             _LegendRow(
-                icon: Icons.report_problem_rounded,
-                color: Colors.amber,
-                label: 'Otro'),
+              icon: Icons.report_problem_rounded,
+              color: Colors.amber,
+              label: 'Otro',
+            ),
             _LegendRow(
-                icon: Icons.check_circle_outline,
-                color: Colors.green,
-                label: 'Resuelto'),
+              icon: Icons.check_circle_outline,
+              color: Colors.green,
+              label: 'Resuelto',
+            ),
             _LegendRow(icon: Icons.sos, color: AppColors.error, label: 'SOS'),
           ],
         ),
@@ -1213,8 +1247,11 @@ class _LegendRow extends StatelessWidget {
   final IconData icon;
   final Color color;
   final String label;
-  const _LegendRow(
-      {required this.icon, required this.color, required this.label});
+  const _LegendRow({
+    required this.icon,
+    required this.color,
+    required this.label,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1227,8 +1264,10 @@ class _LegendRow extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             label,
-            style:
-                const TextStyle(fontSize: 11, color: AppColors.surfacePositive),
+            style: const TextStyle(
+              fontSize: 11,
+              color: AppColors.surfacePositive,
+            ),
           ),
         ],
       ),
@@ -1283,11 +1322,15 @@ class _BarrierSheetState extends State<_BarrierSheet> {
       decoration: BoxDecoration(
         color: AppColors.darkMid,
         borderRadius: BorderRadius.circular(20),
-        border:
-            Border.all(color: AppColors.brandPassive.withValues(alpha: 0.25)),
+        border: Border.all(
+          color: AppColors.brandPassive.withValues(alpha: 0.25),
+        ),
         boxShadow: const [
           BoxShadow(
-              color: Colors.black26, blurRadius: 16, offset: Offset(0, -2))
+            color: Colors.black26,
+            blurRadius: 16,
+            offset: Offset(0, -2),
+          ),
         ],
       ),
       child: Column(
@@ -1300,16 +1343,19 @@ class _BarrierSheetState extends State<_BarrierSheet> {
                 child: Text(
                   widget.barrier.type,
                   style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.surfacePositive),
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.surfacePositive,
+                  ),
                 ),
               ),
               IconButton(
                 onPressed: _toggleSpeak,
-                icon: Icon(_speaking
-                    ? Icons.stop_circle_outlined
-                    : Icons.volume_up_outlined),
+                icon: Icon(
+                  _speaking
+                      ? Icons.stop_circle_outlined
+                      : Icons.volume_up_outlined,
+                ),
                 color: AppColors.brandActive,
                 tooltip: _speaking ? 'Detener lectura' : 'Escuchar barrera',
                 padding: EdgeInsets.zero,
@@ -1330,8 +1376,9 @@ class _BarrierSheetState extends State<_BarrierSheet> {
             Text(
               widget.barrier.description,
               style: TextStyle(
-                  color: AppColors.surfacePositive.withValues(alpha: 0.65),
-                  fontSize: 14),
+                color: AppColors.surfacePositive.withValues(alpha: 0.65),
+                fontSize: 14,
+              ),
             ),
           ],
           if (widget.barrier.photoBytes != null) ...[
@@ -1369,20 +1416,27 @@ class _GeminiAnalysisBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.brandActive.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(10),
-        border:
-            Border.all(color: AppColors.brandActive.withValues(alpha: 0.25)),
+        border: Border.all(
+          color: AppColors.brandActive.withValues(alpha: 0.25),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.auto_awesome,
-              color: AppColors.brandActive, size: 16),
+          const Icon(
+            Icons.auto_awesome,
+            color: AppColors.brandActive,
+            size: 16,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               analysis,
               style: const TextStyle(
-                  fontSize: 12, color: AppColors.surfacePositive, height: 1.4),
+                fontSize: 12,
+                color: AppColors.surfacePositive,
+                height: 1.4,
+              ),
             ),
           ),
         ],
@@ -1409,9 +1463,14 @@ class _StatusBadge extends StatelessWidget {
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Text(label,
-          style: TextStyle(
-              fontSize: 12, color: color, fontWeight: FontWeight.w600)),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     );
   }
 }
@@ -1433,7 +1492,10 @@ class _SosSheet extends StatelessWidget {
         border: Border.all(color: AppColors.error.withValues(alpha: 0.45)),
         boxShadow: const [
           BoxShadow(
-              color: Colors.black26, blurRadius: 16, offset: Offset(0, -2)),
+            color: Colors.black26,
+            blurRadius: 16,
+            offset: Offset(0, -2),
+          ),
         ],
       ),
       child: Column(
@@ -1475,6 +1537,42 @@ class _SosSheet extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Auth button (login/profile)
+// ---------------------------------------------------------------------------
+
+class _AuthButton extends StatelessWidget {
+  const _AuthButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final firebase = context.read<FirebaseService>();
+    return StreamBuilder<User?>(
+      stream: firebase.authState,
+      builder: (context, snapshot) {
+        final signedIn = snapshot.data != null;
+        return Semantics(
+          label: signedIn ? 'Mi perfil' : 'Iniciar sesión',
+          button: true,
+          child: IconButton(
+            onPressed:
+                () => Navigator.pushNamed(
+                  context,
+                  signedIn ? '/profile' : '/login',
+                ),
+            icon: Icon(
+              signedIn ? Icons.account_circle : Icons.login,
+              color: AppColors.brandPassive,
+              size: 28,
+            ),
+            tooltip: signedIn ? 'Mi perfil' : 'Iniciar sesión',
+          ),
+        );
+      },
     );
   }
 }
