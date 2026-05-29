@@ -187,7 +187,7 @@ class _RouteScreenState extends State<RouteScreen>
       _buildIconBitmap(Icons.warning_rounded, AppColors.error),
       _buildIconBitmap(Icons.traffic, const Color(0xFF9334E6)),
       _buildIconBitmap(Icons.check_circle_outline, AppColors.success),
-      _buildIconBitmap(Icons.report_problem_rounded, AppColors.darkMid),
+      _buildIconBitmap(Icons.report_problem_rounded, const Color(0xFF29B6F6)),
     ]);
     _iconCache['Rampa faltante'] = results[0];
     _iconCache['Banqueta dañada'] = results[1];
@@ -693,7 +693,8 @@ class _RouteScreenState extends State<RouteScreen>
     return lines;
   }
 
-  /// Barrier markers for nearby obstacles along the route (renamed from _buildBarrierMarkers).
+  /// Barrier markers for nearby obstacles along the route.
+  /// Uses custom circular bitmap icons — no default Google Maps pins here.
   Set<Marker> _buildRouteBarrierMarkers(RouteResult result) {
     final remainingIds = result.remainingBarriers.map((b) => b.id).toSet();
     return result.nearbyBarriers.map((b) {
@@ -702,9 +703,7 @@ class _RouteScreenState extends State<RouteScreen>
       return Marker(
         markerId: MarkerId('barrier_${b.id}'),
         position: LatLng(b.lat, b.lng),
-        icon: BitmapDescriptor.defaultMarkerWithHue(
-          onRoute ? BitmapDescriptor.hueRed : BitmapDescriptor.hueOrange,
-        ),
+        icon: _iconFor(b),
         infoWindow: InfoWindow(
           title: '$emoji ${b.type}',
           snippet: onRoute ? 'En la ruta' : 'Evitado',
@@ -1306,11 +1305,14 @@ class _RouteScreenState extends State<RouteScreen>
               color: AppColors.darkMid,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: _legendExpanded
-                    ? AppColors.brandPassive.withValues(alpha: 0.6)
-                    : AppColors.brandPassive.withValues(alpha: 0.25),
+                color:
+                    _legendExpanded
+                        ? AppColors.brandPassive.withValues(alpha: 0.6)
+                        : AppColors.brandPassive.withValues(alpha: 0.25),
               ),
-              boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6)],
+              boxShadow: const [
+                BoxShadow(color: Colors.black26, blurRadius: 6),
+              ],
             ),
             child: const Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1332,7 +1334,7 @@ class _RouteScreenState extends State<RouteScreen>
                 ),
                 _LegendRow(
                   icon: Icons.report_problem_rounded,
-                  color: Colors.amber,
+                  color: Color(0xFF29B6F6),
                   label: 'Otro',
                 ),
                 _LegendRow(
