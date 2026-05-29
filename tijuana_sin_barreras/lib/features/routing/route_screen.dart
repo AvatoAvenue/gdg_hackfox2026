@@ -252,7 +252,7 @@ class _RouteScreenState extends State<RouteScreen> {
   Widget _buildRouteInfoBar() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      color: AppColors.secondary.withValues(alpha:0.1),
+      color: AppColors.secondary.withOpacity(0.1),
       child: Row(
         children: [
           const Icon(Icons.accessible, color: AppColors.secondary, size: 20),
@@ -276,7 +276,7 @@ class _RouteScreenState extends State<RouteScreen> {
   Widget _buildErrorBar() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      color: AppColors.danger.withValues(alpha:0.1),
+      color: AppColors.danger.withOpacity(0.1),
       child: Row(
         children: [
           const Icon(Icons.warning_amber, color: AppColors.danger, size: 18),

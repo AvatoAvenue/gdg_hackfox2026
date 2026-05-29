@@ -37,6 +37,7 @@ lib/core/constants/api_keys.dart
 .env.*
 .env.*.local
 .env.local
+!.env.example
 id_dsa
 id_rsa
 
