@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "firebase": "^12.14.0"
+    "firebase": "^12.14.0",
+    "flutter": "^0.0.5"
   }
 }
