@@ -131,23 +131,30 @@ class _RouteScreenState extends State<RouteScreen> {
         _loading = false;
       });
 
-      // Encuadrar la ruta en el mapa.
-      final ctrl = await _mapController.future;
-      final bounds = LatLngBounds(
-        southwest: LatLng(
-          [origin.latLng.latitude, dest.latLng.latitude]
-              .reduce((a, b) => a < b ? a : b),
-          [origin.latLng.longitude, dest.latLng.longitude]
-              .reduce((a, b) => a < b ? a : b),
-        ),
-        northeast: LatLng(
-          [origin.latLng.latitude, dest.latLng.latitude]
-              .reduce((a, b) => a > b ? a : b),
-          [origin.latLng.longitude, dest.latLng.longitude]
-              .reduce((a, b) => a > b ? a : b),
-        ),
-      );
-      ctrl.animateCamera(CameraUpdate.newLatLngBounds(bounds, 80));
+      // Encuadrar la ruta en el mapa. Va en su propio try/catch: en web
+      // animateCamera(newLatLngBounds) puede lanzar y NO debe ocultar una
+      // ruta que sí se calculó y dibujó correctamente.
+      try {
+        final ctrl = await _mapController.future;
+        // Encuadra la ruta completa: usa todos los puntos de la polyline para
+        // que el zoom abarque también las curvas, no solo origen y destino.
+        final lats = points.map((p) => p.latitude);
+        final lngs = points.map((p) => p.longitude);
+        final bounds = LatLngBounds(
+          southwest: LatLng(
+            lats.reduce((a, b) => a < b ? a : b),
+            lngs.reduce((a, b) => a < b ? a : b),
+          ),
+          northeast: LatLng(
+            lats.reduce((a, b) => a > b ? a : b),
+            lngs.reduce((a, b) => a > b ? a : b),
+          ),
+        );
+        await ctrl.animateCamera(CameraUpdate.newLatLngBounds(bounds, 80));
+      } catch (_) {
+        // El encuadre falló (p.ej. mapa no listo en web). La ruta ya está
+        // dibujada; ignoramos el error de cámara.
+      }
     } catch (e) {
       setState(() {
         _error = 'Error inesperado: $e';

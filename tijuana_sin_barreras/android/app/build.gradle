@@ -33,7 +33,8 @@ android {
         applicationId = "com.example.talento_sin_barreras"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // Firebase Auth 23.x exige minSdk 23 (flutter.minSdkVersion es 21).
+        minSdk = 23
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

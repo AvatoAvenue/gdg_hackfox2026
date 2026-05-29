@@ -14,111 +14,31 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.surfaceNeutral,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 32),
-              _buildHeader(context),
-              const SizedBox(height: 40),
-              _buildHeroText(context),
-              const SizedBox(height: 40),
-              _buildActionCards(context),
-              const Spacer(),
-              _buildFooter(),
-              const SizedBox(height: 24),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 52,
-          height: 52,
-          decoration: BoxDecoration(
-            color: AppColors.primary,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: const Icon(Icons.accessible_forward, color: Colors.white, size: 30),
-        ),
-        const SizedBox(width: 14),
-        const Column(
+        bottom: false,
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Barra superior full-width (sin el padding lateral del cuerpo).
             const _MainBar(),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
+                padding: const EdgeInsets.fromLTRB(24, 40, 24, 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 40),
                     _buildHeroText(context),
                     const SizedBox(height: 40),
                     _buildActionCards(context),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 40),
                     _buildFooter(),
-                    const SizedBox(height: 24),
                   ],
                 ),
               ),
             ),
           ],
         ),
-        const Spacer(),
-        _buildAuthButton(context),
-      ],
+      ),
     );
-  }
-
-  /// Botón de cuenta: muestra avatar/perfil si hay sesión, o icono de login.
-  Widget _buildAuthButton(BuildContext context) {
-    final firebase = context.read<FirebaseService>();
-    return StreamBuilder<User?>(
-      stream: firebase.authState,
-      builder: (context, snapshot) {
-        final signedIn = snapshot.data != null;
-        return Semantics(
-          label: signedIn ? 'Mi perfil' : 'Iniciar sesión',
-          button: true,
-          child: IconButton(
-            onPressed: () => Navigator.pushNamed(
-              context,
-              signedIn ? '/profile' : '/login',
-            ),
-            icon: Icon(
-              signedIn ? Icons.account_circle : Icons.login,
-              color: AppColors.primary,
-              size: 30,
-            ),
-            tooltip: signedIn ? 'Mi perfil' : 'Iniciar sesión',
-          ),
-        );
-      },
-    );
-  }
-
-  /// Abre el reporte de barrera, exigiendo sesión primero.
-  Future<void> _openReport(BuildContext context) async {
-    final firebase = context.read<FirebaseService>();
-    if (firebase.isSignedIn) {
-      Navigator.pushNamed(context, '/report');
-      return;
-    }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Inicia sesión para reportar una barrera.')),
-    );
-    final loggedIn = await Navigator.pushNamed(context, '/login');
-    if (loggedIn == true && context.mounted) {
-      Navigator.pushNamed(context, '/report');
-    }
   }
 
   Widget _buildHeroText(BuildContext context) {
@@ -144,39 +64,54 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildActionCards(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: _ActionCard(
-            icon: Icons.map_rounded,
-            color: AppColors.brandActive,
-            title: 'Ver mapa accesible',
-            subtitle: 'Explora barreras reportadas cerca de ti',
-            onTap: () => Navigator.pushNamed(context, '/map'),
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: _ActionCard(
-            icon: Icons.alt_route_rounded,
-            color: AppColors.success,
-            title: 'Calcular ruta accesible',
-            subtitle: 'Encuentra el camino más seguro para llegar',
-            onTap: () => Navigator.pushNamed(context, '/route'),
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: _ActionCard(
-            icon: Icons.report_problem_rounded,
-            color: AppColors.error,
-            title: 'Reportar barrera',
-            subtitle: 'Marca obstáculos y ayuda a otros ciudadanos',
-            onTap: () => Navigator.pushNamed(context, '/report'),
-          ),
-        ),
-      ],
+    final cards = <Widget>[
+      _ActionCard(
+        icon: Icons.map_rounded,
+        color: AppColors.brandActive,
+        title: 'Ver mapa accesible',
+        subtitle: 'Explora barreras reportadas cerca de ti',
+        onTap: () => Navigator.pushNamed(context, '/map'),
+      ),
+      _ActionCard(
+        icon: Icons.alt_route_rounded,
+        color: AppColors.success,
+        title: 'Calcular ruta accesible',
+        subtitle: 'Encuentra el camino más seguro para llegar',
+        onTap: () => Navigator.pushNamed(context, '/route'),
+      ),
+      _ActionCard(
+        icon: Icons.report_problem_rounded,
+        color: AppColors.error,
+        title: 'Reportar barrera',
+        subtitle: 'Marca obstáculos y ayuda a otros ciudadanos',
+        onTap: () => _openReport(context),
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // En pantallas anchas: fila de 3 columnas. En móvil: apiladas.
+        if (constraints.maxWidth >= 720) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < cards.length; i++) ...[
+                if (i > 0) const SizedBox(width: 14),
+                Expanded(child: cards[i]),
+              ],
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < cards.length; i++) ...[
+              if (i > 0) const SizedBox(height: 14),
+              cards[i],
+            ],
+          ],
+        );
+      },
     );
   }
 
@@ -187,6 +122,24 @@ class HomeScreen extends StatelessWidget {
         style: TextStyle(fontSize: 12, color: AppColors.muted),
       ),
     );
+  }
+}
+
+/// Abre el reporte de barrera, exigiendo sesión primero. Función de archivo
+/// para que la usen tanto las tarjetas de acción como el nav item "Reportar".
+Future<void> _openReport(BuildContext context) async {
+  final firebase = context.read<FirebaseService>();
+  if (firebase.isSignedIn) {
+    Navigator.pushNamed(context, '/report');
+    return;
+  }
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text('Inicia sesión para reportar una barrera.')),
+  );
+  final loggedIn = await Navigator.pushNamed(context, '/login');
+  if (loggedIn == true && context.mounted) {
+    Navigator.pushNamed(context, '/report');
   }
 }
 
@@ -202,51 +155,101 @@ class _MainBar extends StatelessWidget {
       width: double.infinity,
       color: AppColors.darkDeep,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          // ── Brand ────────────────────────────────────────────────────────
-          const AppLogo(size: 38, tint: AppColors.brandPassive),
-          const SizedBox(width: 12),
-          Text(
-            'Tijuana Sin Barreras',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: AppColors.brandPassive,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.2,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Los _NavItem usan popups en hover (solo web/escritorio) y no
+          // navegan; en pantallas estrechas (móvil) se ocultan y quedan las
+          // tarjetas de acción del cuerpo, que sí navegan.
+          final showNav = constraints.maxWidth >= 820;
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // ── Brand ──────────────────────────────────────────────────
+              const AppLogo(size: 38, tint: AppColors.brandPassive),
+              const SizedBox(width: 12),
+              Flexible(
+                child: Text(
+                  'Tijuana Sin Barreras',
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: AppColors.brandPassive,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.2,
+                      ),
                 ),
-          ),
+              ),
 
-          const SizedBox(width: 970),
+              const Spacer(),
 
-          // ── Nav items ────────────────────────────────────────────────────
-          const _NavItem(
-            label: 'Mapa',
-            popupTitle: 'Ver mapa accesible',
-            popupBody:
-                'Explora barreras reportadas\ncerca de ti en tiempo real.',
-            icon: Icons.map_rounded,
-            accentColor: AppColors.brandActive,
-          ),
-          const _NavItem(
-            label: 'Ruta',
-            popupTitle: 'Calcular ruta accesible',
-            popupBody:
-                'Encuentra el camino más\nseguro para llegar a tu destino.',
-            icon: Icons.alt_route_rounded,
-            accentColor: AppColors.success,
-          ),
-          const _NavItem(
-            label: 'Reportar',
-            popupTitle: 'Reportar barrera',
-            popupBody: 'Marca obstáculos y ayuda\na otros ciudadanos.',
-            icon: Icons.report_problem_rounded,
-            accentColor: AppColors.error,
-          ),
+              // ── Nav items (solo en pantallas anchas) ───────────────────
+              if (showNav) ...[
+                _NavItem(
+                  label: 'Mapa',
+                  onTap: () => Navigator.pushNamed(context, '/map'),
+                  popupTitle: 'Ver mapa accesible',
+                  popupBody:
+                      'Explora barreras reportadas\ncerca de ti en tiempo real.',
+                  icon: Icons.map_rounded,
+                  accentColor: AppColors.brandActive,
+                ),
+                _NavItem(
+                  label: 'Ruta',
+                  onTap: () => Navigator.pushNamed(context, '/route'),
+                  popupTitle: 'Calcular ruta accesible',
+                  popupBody:
+                      'Encuentra el camino más\nseguro para llegar a tu destino.',
+                  icon: Icons.alt_route_rounded,
+                  accentColor: AppColors.success,
+                ),
+                _NavItem(
+                  label: 'Reportar',
+                  onTap: () => _openReport(context),
+                  popupTitle: 'Reportar barrera',
+                  popupBody: 'Marca obstáculos y ayuda\na otros ciudadanos.',
+                  icon: Icons.report_problem_rounded,
+                  accentColor: AppColors.error,
+                ),
+                const SizedBox(width: 12),
+              ],
 
-          const Spacer(),
-        ],
+              // ── Cuenta (login / perfil) ────────────────────────────────
+              const _AuthButton(),
+            ],
+          );
+        },
       ),
+    );
+  }
+}
+
+/// Botón de cuenta para la barra oscura: perfil si hay sesión, login si no.
+class _AuthButton extends StatelessWidget {
+  const _AuthButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final firebase = context.read<FirebaseService>();
+    return StreamBuilder<User?>(
+      stream: firebase.authState,
+      builder: (context, snapshot) {
+        final signedIn = snapshot.data != null;
+        return Semantics(
+          label: signedIn ? 'Mi perfil' : 'Iniciar sesión',
+          button: true,
+          child: IconButton(
+            onPressed: () => Navigator.pushNamed(
+              context,
+              signedIn ? '/profile' : '/login',
+            ),
+            icon: Icon(
+              signedIn ? Icons.account_circle : Icons.login,
+              color: AppColors.brandPassive,
+              size: 28,
+            ),
+            tooltip: signedIn ? 'Mi perfil' : 'Iniciar sesión',
+          ),
+        );
+      },
     );
   }
 }
@@ -256,6 +259,7 @@ class _MainBar extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 class _NavItem extends StatefulWidget {
   final String label;
+  final VoidCallback onTap;
   final String popupTitle;
   final String popupBody;
   final IconData icon;
@@ -263,6 +267,7 @@ class _NavItem extends StatefulWidget {
 
   const _NavItem({
     required this.label,
+    required this.onTap,
     required this.popupTitle,
     required this.popupBody,
     required this.icon,
@@ -308,44 +313,49 @@ class _NavItemState extends State<_NavItem> {
           onEnter: (_) => _onEnter(),
           onExit: (_) => _onExit(),
           cursor: SystemMouseCursors.click,
-          child: AnimatedScale(
-            scale: _hovered ? 0.95 : 1.0,
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOutBack,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
-              curve: Curves.easeInOut,
-              padding: const EdgeInsets.symmetric(horizontal: 45, vertical: 8),
-              decoration: BoxDecoration(
-                color: _hovered
-                    ? AppColors.darkDeep.withValues(alpha: 0.16)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: _hovered ? AppColors.brandPassive : Colors.transparent,
-                  width: 1.5,
-                ),
-                boxShadow: _hovered
-                    ? [
-                        BoxShadow(
-                          color: AppColors.brandPassive.withValues(alpha: 0.25),
-                          blurRadius: 22,
-                          spreadRadius: 3,
-                        ),
-                      ]
-                    : [],
-              ),
-              child: AnimatedDefaultTextStyle(
+          child: GestureDetector(
+            onTap: widget.onTap,
+            child: AnimatedScale(
+              scale: _hovered ? 0.95 : 1.0,
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutBack,
+              child: AnimatedContainer(
                 duration: const Duration(milliseconds: 160),
-                style: GoogleFonts.lexend(
-                  fontSize: 14,
-                  fontWeight: _hovered ? FontWeight.w500 : FontWeight.w500,
-                  color: _hovered ? Colors.white : AppColors.brandPassive,
+                curve: Curves.easeInOut,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 45, vertical: 8),
+                decoration: BoxDecoration(
+                  color: _hovered
+                      ? AppColors.darkDeep.withOpacity(0.16)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color:
+                        _hovered ? AppColors.brandPassive : Colors.transparent,
+                    width: 1.5,
+                  ),
+                  boxShadow: _hovered
+                      ? [
+                          BoxShadow(
+                            color: AppColors.brandPassive.withOpacity(0.25),
+                            blurRadius: 22,
+                            spreadRadius: 3,
+                          ),
+                        ]
+                      : [],
                 ),
-                child: Text(widget.label),
-              ),
-            ), // cierra AnimatedContainer
-          ), // cierra AnimatedScale
+                child: AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 160),
+                  style: GoogleFonts.lexend(
+                    fontSize: 14,
+                    fontWeight: _hovered ? FontWeight.w500 : FontWeight.w500,
+                    color: _hovered ? Colors.white : AppColors.brandPassive,
+                  ),
+                  child: Text(widget.label),
+                ),
+              ), // cierra AnimatedContainer
+            ), // cierra AnimatedScale
+          ), // cierra GestureDetector
         ), // cierra MouseRegion
       ), // cierra OverlayPortal
     ); // cierra CompositedTransformTarget
@@ -404,11 +414,10 @@ class _NavPopup extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: AppColors.darkMid,
                   borderRadius: BorderRadius.circular(8),
-                  border:
-                      Border.all(color: accentColor.withValues(alpha: 0.40)),
+                  border: Border.all(color: accentColor.withOpacity(0.40)),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.28),
+                      color: Colors.black.withOpacity(0.28),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
@@ -439,7 +448,7 @@ class _NavPopup extends StatelessWidget {
                         Text(
                           body,
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.65),
+                            color: Colors.white.withOpacity(0.65),
                             fontSize: 13,
                             fontWeight: FontWeight.w400,
                           ),
@@ -490,7 +499,7 @@ class _ActionCard extends StatelessWidget {
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               border: Border.all(
-                color: AppColors.brandPassive.withValues(alpha: 0.25),
+                color: AppColors.brandPassive.withOpacity(0.25),
               ),
               borderRadius: BorderRadius.circular(16),
             ),
@@ -501,7 +510,7 @@ class _ActionCard extends StatelessWidget {
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.18),
+                    color: color.withOpacity(0.18),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(icon, color: color, size: 26),
@@ -517,8 +526,7 @@ class _ActionCard extends StatelessWidget {
                 Text(
                   subtitle,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color:
-                            AppColors.surfacePositive.withValues(alpha: 0.65),
+                        color: AppColors.surfacePositive.withOpacity(0.65),
                       ),
                 ),
               ],

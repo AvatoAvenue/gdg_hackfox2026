@@ -180,32 +180,40 @@ class MapsService {
     return null;
   }
 
+  /// Decodifica un polyline codificado de Google a una lista de puntos.
+  ///
+  /// IMPORTANTE: usa aritmética (multiplicación/división) en lugar de
+  /// operadores de bits (`<<`, `>>`, `&`, `~`). En Flutter Web los `int` son
+  /// números de JavaScript y los operadores de bits truncan a 32 bits: cuando
+  /// `shift` llega a 30, `(b & 0x1f) << shift` desborda y corrompe las
+  /// coordenadas (la ruta se dibuja como una línea horizontal). La aritmética
+  /// es segura hasta 2^53, así que funciona igual en web y en móvil.
   List<LatLng> decodePolyline(String encoded) {
-    final result = <LatLng>[];
+    final points = <LatLng>[];
     int index = 0;
     int lat = 0, lng = 0;
 
     while (index < encoded.length) {
-      int shift = 0, result0 = 0;
+      int shift = 0, result = 0;
       int b;
       do {
         b = encoded.codeUnitAt(index++) - 63;
-        result0 |= (b & 0x1f) << shift;
+        result += (b & 0x1f) * (1 << shift);
         shift += 5;
       } while (b >= 0x20);
-      lat += (result0 & 1) != 0 ? ~(result0 >> 1) : result0 >> 1;
+      lat += result.isOdd ? -(result ~/ 2) - 1 : result ~/ 2;
 
       shift = 0;
-      result0 = 0;
+      result = 0;
       do {
         b = encoded.codeUnitAt(index++) - 63;
-        result0 |= (b & 0x1f) << shift;
+        result += (b & 0x1f) * (1 << shift);
         shift += 5;
       } while (b >= 0x20);
-      lng += (result0 & 1) != 0 ? ~(result0 >> 1) : result0 >> 1;
+      lng += result.isOdd ? -(result ~/ 2) - 1 : result ~/ 2;
 
-      result.add(LatLng(lat / 1e5, lng / 1e5));
+      points.add(LatLng(lat / 1e5, lng / 1e5));
     }
-    return result;
+    return points;
   }
 }
