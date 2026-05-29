@@ -216,6 +216,18 @@ class _BarrierSheet extends StatelessWidget {
             const SizedBox(height: 6),
             Text(barrier.description, style: const TextStyle(color: AppColors.muted, fontSize: 14)),
           ],
+          if (barrier.photoBytes != null) ...[
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.memory(
+                barrier.photoBytes!,
+                height: 180,
+                width: double.infinity,
+                fit: BoxFit.cover,
+              ),
+            ),
+          ],
           if (barrier.geminiAnalysis != null) ...[
             const SizedBox(height: 12),
             _GeminiAnalysisBadge(analysis: barrier.geminiAnalysis!),

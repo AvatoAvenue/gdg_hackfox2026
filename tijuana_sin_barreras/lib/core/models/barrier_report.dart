@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class BarrierReport {
@@ -6,7 +8,10 @@ class BarrierReport {
   final double lng;
   final String type;
   final String description;
-  final String? photoUrl;
+
+  /// Foto codificada en base64 y guardada dentro del documento de Firestore.
+  /// Se usa este enfoque en vez de Firebase Storage (que requiere plan Blaze).
+  final String? photoBase64;
   final String? geminiAnalysis;
   final DateTime reportedAt;
   final String status;
@@ -20,7 +25,7 @@ class BarrierReport {
     required this.lng,
     required this.type,
     required this.description,
-    this.photoUrl,
+    this.photoBase64,
     this.geminiAnalysis,
     required this.reportedAt,
     this.status = 'pending',
@@ -28,6 +33,17 @@ class BarrierReport {
     this.verifiedBy,
     this.verifiedAt,
   });
+
+  /// Bytes decodificados de la foto, listos para `Image.memory`. Null si no hay
+  /// foto o si el contenido no es base64 válido.
+  Uint8List? get photoBytes {
+    if (photoBase64 == null || photoBase64!.isEmpty) return null;
+    try {
+      return base64Decode(photoBase64!);
+    } catch (_) {
+      return null;
+    }
+  }
 
   factory BarrierReport.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
@@ -37,7 +53,7 @@ class BarrierReport {
       lng: (data['lng'] as num).toDouble(),
       type: data['type'] as String? ?? 'Otro',
       description: data['description'] as String? ?? '',
-      photoUrl: data['photoUrl'] as String?,
+      photoBase64: data['photoBase64'] as String?,
       geminiAnalysis: data['geminiAnalysis'] as String?,
       reportedAt: data['reportedAt'] != null
           ? (data['reportedAt'] as Timestamp).toDate()
@@ -56,7 +72,7 @@ class BarrierReport {
         'lng': lng,
         'type': type,
         'description': description,
-        'photoUrl': photoUrl,
+        'photoBase64': photoBase64,
         'geminiAnalysis': geminiAnalysis,
         'reportedAt': Timestamp.fromDate(reportedAt),
         'status': status,

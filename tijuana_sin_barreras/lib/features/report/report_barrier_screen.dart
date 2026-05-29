@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -77,10 +78,26 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
     setState(() => _submitting = true);
     try {
       final firebase = context.read<FirebaseService>();
-      String? photoUrl;
+      String? photoBase64;
 
       if (_photoBytes != null) {
-        photoUrl = await firebase.uploadBarrierPhoto(_photoBytes!);
+        // La foto se guarda como base64 dentro del documento de Firestore
+        // (evitamos Firebase Storage, que requiere plan de pago). Un documento
+        // de Firestore admite máx. 1 MB, así que rechazamos fotos muy pesadas.
+        const maxBytes = 900 * 1024; // ~900 KB de bytes crudos
+        if (_photoBytes!.lengthInBytes > maxBytes) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'La foto es demasiado grande. Toma otra con menor resolución.',
+              ),
+              backgroundColor: AppColors.danger,
+            ),
+          );
+          setState(() => _submitting = false);
+          return;
+        }
+        photoBase64 = base64Encode(_photoBytes!);
       }
 
       final description = _descController.text.trim().isNotEmpty
@@ -92,7 +109,7 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
         lng: _position!.longitude,
         type: _selectedType,
         description: description,
-        photoUrl: photoUrl,
+        photoBase64: photoBase64,
         geminiAnalysis: _geminiResult,
       );
 

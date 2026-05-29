@@ -1,19 +1,14 @@
-import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:uuid/uuid.dart';
 import '../models/barrier_report.dart';
 import '../models/user_profile.dart';
 
 class FirebaseService {
   final _db = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
-  final _storage = FirebaseStorage.instance;
   final _googleSignIn = GoogleSignIn();
-  final _uuid = const Uuid();
 
   // ---------------------------------------------------------------------------
   // AUTH — Google Sign-In + email/password
@@ -150,19 +145,12 @@ class FirebaseService {
         .map((snap) => snap.docs.map(BarrierReport.fromFirestore).toList());
   }
 
-  Future<String> uploadBarrierPhoto(Uint8List bytes) async {
-    final id = _uuid.v4();
-    final ref = _storage.ref('barriers/$id.jpg');
-    await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
-    return ref.getDownloadURL();
-  }
-
   Future<String> submitBarrierReport({
     required double lat,
     required double lng,
     required String type,
     required String description,
-    String? photoUrl,
+    String? photoBase64,
     String? geminiAnalysis,
   }) async {
     if (!isSignedIn) {
@@ -173,7 +161,7 @@ class FirebaseService {
       'lng': lng,
       'type': type,
       'description': description,
-      'photoUrl': photoUrl,
+      'photoBase64': photoBase64,
       'geminiAnalysis': geminiAnalysis,
       'reportedAt': FieldValue.serverTimestamp(),
       'status': 'pending',
