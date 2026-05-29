@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+﻿import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -98,7 +98,7 @@ class _LogoPainter extends CustomPainter {
         Offset(cx, cy),
         s * 0.455,
         Paint()
-          ..color = Colors.white.withValues(alpha: 0.10)
+          ..color = Colors.white.withOpacity(0.10)
           ..style = PaintingStyle.stroke
           ..strokeWidth = s * 0.016,
       );

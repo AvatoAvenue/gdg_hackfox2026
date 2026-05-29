@@ -9,6 +9,36 @@ rootProject.buildDir = "../build"
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
+
+// Fix geolocator_android (4.6.x usa el patrón viejo): su build.gradle hace
+// `compileSdk flutter.compileSdkVersion` / `minSdkVersion flutter.minSdkVersion`,
+// pero el extension `flutter` solo se registra en :app, no en el subproyecto del
+// plugin -> "Could not get unknown property 'flutter'" y luego el chequeo de
+// flutter.groovy revienta con "Cannot invoke method substring() on null object".
+// Inyectamos un shim `ext.flutter` ANTES de evaluar el plugin para que esas
+// líneas resuelvan. beforeEvaluate es clave: corre antes de su build.gradle.
+def flutterShim = [
+    compileSdkVersion: 34,
+    minSdkVersion    : 21,
+    targetSdkVersion : 34,
+]
+subprojects { subproject ->
+    if (subproject.name != "app") {
+        subproject.beforeEvaluate {
+            if (!subproject.hasProperty("flutter")) {
+                subproject.ext.flutter = flutterShim
+            }
+        }
+        // Belt-and-suspenders: si algún plugin igual deja compileSdk sin definir.
+        subproject.afterEvaluate {
+            if (subproject.hasProperty("android")
+                    && subproject.android.compileSdkVersion == null) {
+                subproject.android.compileSdkVersion 34
+            }
+        }
+    }
+}
+
 subprojects {
     project.evaluationDependsOn(":app")
 }

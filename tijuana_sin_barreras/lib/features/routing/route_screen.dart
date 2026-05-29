@@ -4,7 +4,9 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/models/place_models.dart';
 import '../../core/services/maps_service.dart';
+import '../../shared/widgets/place_search_field.dart';
 
 class RouteScreen extends StatefulWidget {
   const RouteScreen({super.key});
@@ -18,19 +20,38 @@ class _RouteScreenState extends State<RouteScreen> {
   final _destCtrl = TextEditingController();
   final _mapController = Completer<GoogleMapController>();
 
+  // Lugares resueltos (coords exactas) elegidos del autocompletado.
+  PlaceResult? _originPlace;
+  PlaceResult? _destPlace;
+
   Set<Polyline> _polylines = {};
   Set<Marker> _markers = {};
   bool _loading = false;
   String? _routeInfo;
   String? _error;
 
-  static const _tijuanaCenter = LatLng(AppConstants.tijuanaLat, AppConstants.tijuanaLng);
+  static const _tijuanaCenter =
+      LatLng(AppConstants.tijuanaLat, AppConstants.tijuanaLng);
+
+  MapsService get _maps => context.read<MapsService>();
+
+  /// Resuelve un extremo: usa el lugar elegido en el autocompletado; si el
+  /// usuario escribió sin elegir de la lista, cae al Text Search.
+  Future<PlaceResult?> _resolveEndpoint(
+    PlaceResult? selected,
+    String typed,
+  ) async {
+    if (selected != null) return selected;
+    if (typed.trim().isEmpty) return null;
+    return _maps.searchText('$typed Tijuana');
+  }
 
   Future<void> _calcRoute() async {
-    final origin = _originCtrl.text.trim();
-    final dest = _destCtrl.text.trim();
+    final originTyped = _originCtrl.text.trim();
+    final destTyped = _destCtrl.text.trim();
 
-    if (origin.isEmpty || dest.isEmpty) {
+    if ((_originPlace == null && originTyped.isEmpty) ||
+        (_destPlace == null && destTyped.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Por favor ingresa origen y destino')),
       );
@@ -46,34 +67,21 @@ class _RouteScreenState extends State<RouteScreen> {
     });
 
     try {
-      final maps = context.read<MapsService>();
+      final origin = await _resolveEndpoint(_originPlace, originTyped);
+      final dest = await _resolveEndpoint(_destPlace, destTyped);
 
-      final originResults = await maps.searchPlaces('$origin Tijuana');
-      final destResults = await maps.searchPlaces('$dest Tijuana');
-
-      if (originResults.isEmpty || destResults.isEmpty) {
+      if (origin == null || dest == null) {
         setState(() {
-          _error = 'No se encontraron las ubicaciones. Intenta ser más específico.';
+          _error =
+              'No se encontraron las ubicaciones. Elige una opción de la lista.';
           _loading = false;
         });
         return;
       }
 
-      final originGeo = originResults.first['geometry']['location'] as Map;
-      final destGeo = destResults.first['geometry']['location'] as Map;
-
-      final originLatLng = LatLng(
-        (originGeo['lat'] as num).toDouble(),
-        (originGeo['lng'] as num).toDouble(),
-      );
-      final destLatLng = LatLng(
-        (destGeo['lat'] as num).toDouble(),
-        (destGeo['lng'] as num).toDouble(),
-      );
-
-      final routeData = await maps.getAccessibleRoute(
-        origin: originLatLng,
-        destination: destLatLng,
+      final routeData = await _maps.getAccessibleRoute(
+        origin: origin.latLng,
+        destination: dest.latLng,
       );
 
       if (routeData == null || (routeData['routes'] as List?)?.isEmpty == true) {
@@ -86,7 +94,7 @@ class _RouteScreenState extends State<RouteScreen> {
 
       final route = (routeData['routes'] as List).first as Map<String, dynamic>;
       final polylineEncoded = route['polyline']['encodedPolyline'] as String;
-      final points = maps.decodePolyline(polylineEncoded);
+      final points = _maps.decodePolyline(polylineEncoded);
       final distanceM = (route['distanceMeters'] as num).toInt();
       final durationS = int.tryParse(
             (route['duration'] as String).replaceAll('s', ''),
@@ -101,21 +109,21 @@ class _RouteScreenState extends State<RouteScreen> {
             points: points,
             color: AppColors.secondary,
             width: 5,
-            patterns: const [],
           ),
         };
         _markers = {
           Marker(
             markerId: const MarkerId('origin'),
-            position: originLatLng,
-            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-            infoWindow: InfoWindow(title: 'Inicio: $origin'),
+            position: origin.latLng,
+            icon:
+                BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+            infoWindow: InfoWindow(title: 'Inicio: ${origin.name}'),
           ),
           Marker(
             markerId: const MarkerId('dest'),
-            position: destLatLng,
+            position: dest.latLng,
             icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-            infoWindow: InfoWindow(title: 'Destino: $dest'),
+            infoWindow: InfoWindow(title: 'Destino: ${dest.name}'),
           ),
         };
         _routeInfo =
@@ -123,19 +131,30 @@ class _RouteScreenState extends State<RouteScreen> {
         _loading = false;
       });
 
-      // Zoom to fit the route
-      final ctrl = await _mapController.future;
-      final bounds = LatLngBounds(
-        southwest: LatLng(
-          [originLatLng.latitude, destLatLng.latitude].reduce((a, b) => a < b ? a : b),
-          [originLatLng.longitude, destLatLng.longitude].reduce((a, b) => a < b ? a : b),
-        ),
-        northeast: LatLng(
-          [originLatLng.latitude, destLatLng.latitude].reduce((a, b) => a > b ? a : b),
-          [originLatLng.longitude, destLatLng.longitude].reduce((a, b) => a > b ? a : b),
-        ),
-      );
-      ctrl.animateCamera(CameraUpdate.newLatLngBounds(bounds, 80));
+      // Encuadrar la ruta en el mapa. Va en su propio try/catch: en web
+      // animateCamera(newLatLngBounds) puede lanzar y NO debe ocultar una
+      // ruta que sí se calculó y dibujó correctamente.
+      try {
+        final ctrl = await _mapController.future;
+        // Encuadra la ruta completa: usa todos los puntos de la polyline para
+        // que el zoom abarque también las curvas, no solo origen y destino.
+        final lats = points.map((p) => p.latitude);
+        final lngs = points.map((p) => p.longitude);
+        final bounds = LatLngBounds(
+          southwest: LatLng(
+            lats.reduce((a, b) => a < b ? a : b),
+            lngs.reduce((a, b) => a < b ? a : b),
+          ),
+          northeast: LatLng(
+            lats.reduce((a, b) => a > b ? a : b),
+            lngs.reduce((a, b) => a > b ? a : b),
+          ),
+        );
+        await ctrl.animateCamera(CameraUpdate.newLatLngBounds(bounds, 80));
+      } catch (_) {
+        // El encuadre falló (p.ej. mapa no listo en web). La ruta ya está
+        // dibujada; ignoramos el error de cámara.
+      }
     } catch (e) {
       setState(() {
         _error = 'Error inesperado: $e';
@@ -179,27 +198,24 @@ class _RouteScreenState extends State<RouteScreen> {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
       child: Column(
         children: [
-          TextField(
+          PlaceSearchField(
+            mapsService: _maps,
             controller: _originCtrl,
-            textInputAction: TextInputAction.next,
-            decoration: const InputDecoration(
-              hintText: 'Origen  (ej. Centro Cívico)',
-              prefixIcon: Icon(Icons.trip_origin, color: AppColors.secondary),
-              filled: true,
-              fillColor: Color(0xFFF8F9FA),
-            ),
+            hintText: 'Origen  (ej. Centro Cívico)',
+            icon: Icons.trip_origin,
+            iconColor: AppColors.secondary,
+            onSelected: (place) => setState(() => _originPlace = place),
+            onCleared: () => setState(() => _originPlace = null),
           ),
           const SizedBox(height: 8),
-          TextField(
+          PlaceSearchField(
+            mapsService: _maps,
             controller: _destCtrl,
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) => _calcRoute(),
-            decoration: const InputDecoration(
-              hintText: 'Destino  (ej. Hospital General)',
-              prefixIcon: Icon(Icons.location_on, color: AppColors.danger),
-              filled: true,
-              fillColor: Color(0xFFF8F9FA),
-            ),
+            hintText: 'Destino  (ej. Hospital General)',
+            icon: Icons.location_on,
+            iconColor: AppColors.danger,
+            onSelected: (place) => setState(() => _destPlace = place),
+            onCleared: () => setState(() => _destPlace = null),
           ),
           const SizedBox(height: 12),
           _buildDemoChips(),
@@ -215,7 +231,8 @@ class _RouteScreenState extends State<RouteScreen> {
                 ? const SizedBox(
                     width: 18,
                     height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
                   )
                 : const Icon(Icons.alt_route),
             label: Text(_loading ? 'Calculando...' : 'Calcular ruta accesible'),
@@ -235,18 +252,30 @@ class _RouteScreenState extends State<RouteScreen> {
             padding: const EdgeInsets.only(right: 6),
             child: ActionChip(
               label: Text(short, style: const TextStyle(fontSize: 12)),
-              onPressed: () {
-                if (_originCtrl.text.isEmpty) {
-                  _originCtrl.text = short;
-                } else {
-                  _destCtrl.text = short;
-                }
-              },
+              onPressed: () => _applyDemoLocation(short),
             ),
           );
         }).toList(),
       ),
     );
+  }
+
+  /// Rellena origen o destino con un lugar de demo, resolviendo sus coordenadas
+  /// directamente (sin que el usuario escriba) para que la ruta funcione.
+  Future<void> _applyDemoLocation(String short) async {
+    final isOrigin = _originCtrl.text.isEmpty;
+    final ctrl = isOrigin ? _originCtrl : _destCtrl;
+    ctrl.text = short;
+
+    final result = await _maps.searchText('$short Tijuana');
+    if (result == null) return;
+    setState(() {
+      if (isOrigin) {
+        _originPlace = result;
+      } else {
+        _destPlace = result;
+      }
+    });
   }
 
   Widget _buildRouteInfoBar() {
@@ -259,10 +288,12 @@ class _RouteScreenState extends State<RouteScreen> {
           const SizedBox(width: 8),
           Text(
             _routeInfo!,
-            style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.secondary),
+            style: const TextStyle(
+                fontWeight: FontWeight.w600, color: AppColors.secondary),
           ),
           const Spacer(),
-          const Icon(Icons.check_circle_outline, color: AppColors.secondary, size: 16),
+          const Icon(Icons.check_circle_outline,
+              color: AppColors.secondary, size: 16),
           const SizedBox(width: 4),
           const Text(
             'Ruta peatonal',

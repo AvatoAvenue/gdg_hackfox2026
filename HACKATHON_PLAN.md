@@ -3,17 +3,17 @@
 
 ---
 
-## 1. MVP — Funcionalidades MÍNIMAS (sí o sí)
+## 1. MVP
 
-### Core Features (sin estas = descalificación)
-- [ ] **Mapa con marcadores de barreras** — Firebase Realtime + Google Maps Flutter
+### Core Features
+- [X] **Mapa con marcadores de barreras** — Firebase Realtime + Google Maps Flutter
 - [ ] **Reporte de barrera con foto + GPS** — Firebase Storage + Firestore
 - [ ] **Análisis IA de la foto** — Gemini API clasifica tipo y riesgo automáticamente
-- [ ] **Ruta peatonal accesible** — Google Routes API (travelMode: WALK)
-- [ ] **Búsqueda de destino** — Places API con sesgo a Tijuana
+- [X] **Ruta peatonal accesible** — Google Routes API (travelMode: WALK)
+- [X] **Búsqueda de destino** — Places API con sesgo a Tijuana
 
-### Features que suman puntos (si hay tiempo)
-- [ ] Login anónimo (Firebase Auth — 30 min)
+### Features que suman puntos
+- [X] Login anónimo
 - [ ] Filtros de mapa por tipo de barrera
 - [ ] Score de accesibilidad de ruta con IA
 - [ ] Estadísticas en BigQuery (número de barreras por colonia)
@@ -64,23 +64,23 @@
 ### DÍA 1 — Viernes
 
 #### Bloque 0: CHECK-IN (8:00–9:00 AM) — 1h
-- [ ] Todos: instalar Flutter, VS Code, activar APIs de Google Cloud
-- [ ] Backend: crear proyecto Firebase, habilitar Firestore + Storage + Functions
-- [ ] IA: crear API key de Gemini en Google AI Studio
-- [ ] Maps: habilitar Maps SDK, Routes API, Places API en GCP Console
-- [ ] Crear `.env` con todas las keys
+- [X] Todos: instalar Flutter, VS Code, activar APIs de Google Cloud
+- [X] Backend: crear proyecto Firebase, habilitar Firestore + Storage + Functions
+- [X] IA: crear API key de Gemini en Google AI Studio
+- [X] Maps: habilitar Maps SDK, Routes API, Places API en GCP Console
+- [X] Crear `.env` con todas las keys
 
 #### Bloque 1: FUNDAMENTOS (9:00–11:00 AM) — 2h
-- Flutter: esqueleto de app (nav, pantallas vacías, theme)
-- Backend: schema Firestore + reglas + index.js Cloud Function vacío
-- IA: test de Maps API con curl/Postman (verificar que funciona)
-- UX: wireframes en Excalidraw o papel (HOME + MAPA + REPORTE)
+- [X] Flutter: esqueleto de app (nav, pantallas vacías, theme)
+- [X] Backend: schema Firestore + reglas + index.js Cloud Function vacío
+- [ ] IA: test de Maps API con curl/Postman (verificar que funciona)
+- [ ] UX: wireframes en Excalidraw o papel (HOME + MAPA + REPORTE)
 
 #### Bloque 2: CORE FEATURES (11:00 AM–2:00 PM) — 3h
-- Flutter: pantalla Mapa con Google Maps + Stream de barreras
-- Backend: submitBarrierReport() + uploadPhoto() funcionando
-- IA: Gemini analyzeBarrierPhoto() integrado en Cloud Function
-- UX: pantalla de Reporte (formulario completo)
+- [ ] Flutter: pantalla Mapa con Google Maps + Stream de barreras
+- [ ] Backend: submitBarrierReport() + uploadPhoto() funcionando
+- [ ] IA: Gemini analyzeBarrierPhoto() integrado en Cloud Function
+- [ ] UX: pantalla de Reporte (formulario completo)
 
 #### ALMUERZO + GIT SYNC (2:00–3:00 PM) — 1h
 - **Commit obligatorio**: `feat: core map and report screens`
@@ -88,8 +88,8 @@
 - Cada quien come y descansa 20 min
 
 #### Bloque 3: INTEGRACIÓN (3:00–7:00 PM) — 4h
-- Flutter: pantalla de Ruta (Routes API + Polyline)
-- Backend: Cloud Function deployada y probada
+- [ ] Flutter: pantalla de Ruta (Routes API + Polyline)
+- [ ] Backend: Cloud Function deployada y probada
 - IA: Places API search + decode polyline
 - UX: polish UI (colores, accesibilidad, iconos SVG)
 
