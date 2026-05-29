@@ -198,6 +198,21 @@ FIREBASE_APP_ID=...
 > ⚠️ Nunca subas tu `.env` ni `google-services.json` con claves reales. Usa
 > `.env.example` como plantilla.
 
+> 🗺️ **Android: el mapa también necesita la key en `android/local.properties`.**
+> El `AndroidManifest.xml` lee la clave de Maps del placeholder `${GOOGLE_MAPS_KEY}`,
+> que `android/app/build.gradle` toma de `android/local.properties` (NO del `.env`).
+> Ese archivo está en `.gitignore` (es por máquina), así que cada quien debe agregar
+> la línea manualmente o el mapa saldrá **en blanco/gris**:
+>
+> ```properties
+> # tijuana_sin_barreras/android/local.properties
+> GOOGLE_MAPS_KEY=tu_key_de_google_maps
+> ```
+>
+> Además, el SHA-1 del keystore con el que firmas debe estar autorizado en la API key
+> (Google Cloud) y en `google-services.json` (Firebase, para el login con Google).
+> Obtén tu SHA-1 debug con `cd android && ./gradlew signingReport`.
+
 ### APIs de Google Cloud a habilitar
 
 - Maps SDK for Android / Maps JavaScript API
