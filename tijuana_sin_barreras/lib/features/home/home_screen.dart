@@ -1,5 +1,8 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/services/firebase_service.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -15,7 +18,7 @@ class HomeScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 32),
-              _buildHeader(),
+              _buildHeader(context),
               const SizedBox(height: 40),
               _buildHeroText(context),
               const SizedBox(height: 40),
@@ -30,7 +33,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(BuildContext context) {
     return Row(
       children: [
         Container(
@@ -56,8 +59,54 @@ class HomeScreen extends StatelessWidget {
             ),
           ],
         ),
+        const Spacer(),
+        _buildAuthButton(context),
       ],
     );
+  }
+
+  /// Botón de cuenta: muestra avatar/perfil si hay sesión, o icono de login.
+  Widget _buildAuthButton(BuildContext context) {
+    final firebase = context.read<FirebaseService>();
+    return StreamBuilder<User?>(
+      stream: firebase.authState,
+      builder: (context, snapshot) {
+        final signedIn = snapshot.data != null;
+        return Semantics(
+          label: signedIn ? 'Mi perfil' : 'Iniciar sesión',
+          button: true,
+          child: IconButton(
+            onPressed: () => Navigator.pushNamed(
+              context,
+              signedIn ? '/profile' : '/login',
+            ),
+            icon: Icon(
+              signedIn ? Icons.account_circle : Icons.login,
+              color: AppColors.primary,
+              size: 30,
+            ),
+            tooltip: signedIn ? 'Mi perfil' : 'Iniciar sesión',
+          ),
+        );
+      },
+    );
+  }
+
+  /// Abre el reporte de barrera, exigiendo sesión primero.
+  Future<void> _openReport(BuildContext context) async {
+    final firebase = context.read<FirebaseService>();
+    if (firebase.isSignedIn) {
+      Navigator.pushNamed(context, '/report');
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Inicia sesión para reportar una barrera.')),
+    );
+    final loggedIn = await Navigator.pushNamed(context, '/login');
+    if (loggedIn == true && context.mounted) {
+      Navigator.pushNamed(context, '/report');
+    }
   }
 
   Widget _buildHeroText(BuildContext context) {
@@ -101,7 +150,7 @@ class HomeScreen extends StatelessWidget {
           color: AppColors.danger,
           title: 'Reportar barrera',
           subtitle: 'Marca obstáculos y ayuda a otros ciudadanos',
-          onTap: () => Navigator.pushNamed(context, '/report'),
+          onTap: () => _openReport(context),
         ),
       ],
     );

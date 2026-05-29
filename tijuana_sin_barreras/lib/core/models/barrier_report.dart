@@ -11,6 +11,8 @@ class BarrierReport {
   final DateTime reportedAt;
   final String status;
   final String? userId;
+  final String? verifiedBy;
+  final DateTime? verifiedAt;
 
   const BarrierReport({
     required this.id,
@@ -23,6 +25,8 @@ class BarrierReport {
     required this.reportedAt,
     this.status = 'pending',
     this.userId,
+    this.verifiedBy,
+    this.verifiedAt,
   });
 
   factory BarrierReport.fromFirestore(DocumentSnapshot doc) {
@@ -40,6 +44,10 @@ class BarrierReport {
           : DateTime.now(),
       status: data['status'] as String? ?? 'pending',
       userId: data['userId'] as String?,
+      verifiedBy: data['verifiedBy'] as String?,
+      verifiedAt: data['verifiedAt'] != null
+          ? (data['verifiedAt'] as Timestamp).toDate()
+          : null,
     );
   }
 
@@ -53,5 +61,7 @@ class BarrierReport {
         'reportedAt': Timestamp.fromDate(reportedAt),
         'status': status,
         'userId': userId,
+        'verifiedBy': verifiedBy,
+        'verifiedAt': verifiedAt != null ? Timestamp.fromDate(verifiedAt!) : null,
       };
 }

@@ -3,21 +3,65 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Barriers: anyone can read, authenticated users can create
+    // ---- Helpers ----
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Lee el rol desde /users/{uid}. get()/exists() en reglas omiten
+    // las reglas de lectura, así que funciona aunque el perfil sea privado.
+    function isModerator() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'moderador';
+    }
+
+    // ---- Perfiles de usuario ----
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isModerator();
+
+      // El usuario crea su propio perfil, SIEMPRE como 'ciudadano'.
+      // El ascenso a 'moderador' se hace manualmente desde Firebase Console.
+      allow create: if isOwner(userId)
+        && request.resource.data.role == 'ciudadano'
+        && request.resource.data.keys().hasAll(['displayName', 'role', 'createdAt']);
+
+      // El usuario edita su perfil pero NO puede cambiar su rol ni su email.
+      allow update: if isOwner(userId)
+        && request.resource.data.diff(resource.data)
+             .affectedKeys().hasOnly(['displayName', 'photoUrl', 'updatedAt']);
+
+      allow delete: if false;
+    }
+
+    // ---- Barreras ----
     match /barriers/{barrierId} {
+      // Lectura pública: el mapa es visible sin sesión.
       allow read: if true;
-      allow create: if request.auth != null
+
+      // Cualquier usuario autenticado (incl. anónimo) puede reportar.
+      allow create: if isSignedIn()
         && request.resource.data.keys().hasAll(['lat', 'lng', 'type', 'description', 'reportedAt', 'status'])
         && request.resource.data.lat is float
         && request.resource.data.lng is float
         && request.resource.data.type is string
         && request.resource.data.status == 'pending';
-      // Only Cloud Functions (admin SDK) can update
-      allow update: if false;
+
+      // Solo moderadores pueden verificar/resolver (cambiar status).
+      // El análisis de Gemini lo escribe Cloud Functions (admin SDK omite reglas).
+      allow update: if isModerator()
+        && request.resource.data.diff(resource.data)
+             .affectedKeys().hasOnly(['status', 'verifiedBy', 'verifiedAt'])
+        && request.resource.data.status in ['pending', 'verified', 'resolved'];
+
       allow delete: if false;
     }
 
-    // Block all other collections
+    // Bloquear cualquier otra colección.
     match /{document=**} {
       allow read, write: if false;
     }

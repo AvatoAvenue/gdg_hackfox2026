@@ -17,6 +17,9 @@ dependencies:
   cloud_firestore: ^5.4.4
   firebase_storage: ^12.3.2
 
+  # Google Sign-In (login con cuenta de Google)
+  google_sign_in: ^6.2.1
+
   # Maps & Location
   google_maps_flutter: ^2.9.0
   geolocator: ^13.0.1
