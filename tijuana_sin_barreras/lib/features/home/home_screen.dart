@@ -5,6 +5,7 @@ import '../../core/constants/app_colors.dart';
 import '../../shared/widgets/app_logo.dart';
 import 'package:provider/provider.dart';
 import '../../core/services/firebase_service.dart';
+import '../../shared/utils/report_guard.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -125,23 +126,9 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-/// Abre el reporte de barrera, exigiendo sesión primero. Función de archivo
-/// para que la usen tanto las tarjetas de acción como el nav item "Reportar".
-Future<void> _openReport(BuildContext context) async {
-  final firebase = context.read<FirebaseService>();
-  if (firebase.isSignedIn) {
-    Navigator.pushNamed(context, '/report');
-    return;
-  }
-
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Inicia sesión para reportar una barrera.')),
-  );
-  final loggedIn = await Navigator.pushNamed(context, '/login');
-  if (loggedIn == true && context.mounted) {
-    Navigator.pushNamed(context, '/report');
-  }
-}
+/// Abre el reporte de barrera, exigiendo sesión primero. Delega en el helper
+/// compartido `openReportGuarded` para que el flujo sea idéntico en toda la app.
+Future<void> _openReport(BuildContext context) => openReportGuarded(context);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main bar

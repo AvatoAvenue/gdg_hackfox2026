@@ -51,22 +51,22 @@ táctiles grandes).
       <sub><b>Inicio</b> — acceso a mapa, ruta y reporte</sub>
     </td>
     <td align="center" width="33%">
-      <img src="docs/screenshots/login.png" alt="Inicio de sesión" width="240"/><br/>
-      <sub><b>Login</b> — Google o email/contraseña</sub>
+      <img src="docs/screenshots/route.png" alt="Mapa y ruta accesible" width="240"/><br/>
+      <sub><b>Mapa y ruta</b> — barreras y alertas SOS en tiempo real, búsqueda de origen/destino y botón "Reportar"</sub>
     </td>
     <td align="center" width="33%">
-      <img src="docs/screenshots/map.png" alt="Mapa de barreras" width="240"/><br/>
-      <sub><b>Mapa</b> — barreras y alertas SOS en tiempo real</sub>
+      <img src="docs/screenshots/login.png" alt="Inicio de sesión" width="240"/><br/>
+      <sub><b>Login</b> — Google o email/contraseña; se exige al pulsar "Reportar" sin sesión</sub>
     </td>
   </tr>
   <tr>
     <td align="center" width="33%">
-      <img src="docs/screenshots/route.png" alt="Ruta accesible" width="240"/><br/>
-      <sub><b>Ruta accesible</b> — búsqueda de origen/destino</sub>
+      <img src="docs/screenshots/report.png" alt="Reportar barrera" width="240"/><br/>
+      <sub><b>Reporte</b> — tipo de barrera, foto y descripción (requiere sesión)</sub>
     </td>
     <td align="center" width="33%">
-      <img src="docs/screenshots/report.png" alt="Reportar barrera" width="240"/><br/>
-      <sub><b>Reporte</b> — tipo de barrera, foto y descripción</sub>
+      <img src="docs/screenshots/profile.png" alt="Perfil de usuario" width="240"/><br/>
+      <sub><b>Perfil</b> — sesión iniciada con Firebase Auth hasta cerrar sesión</sub>
     </td>
     <td align="center" width="33%"></td>
   </tr>
