@@ -4,7 +4,9 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.5.4
+  # google_fonts 6.3.3 exige Dart >=3.7.0 (Flutter >=3.29). Mantener este piso
+  # alineado evita que SDKs viejos degraden a google_fonts 6.2.x.
+  sdk: ^3.7.0
 
 dependencies:
   flutter:

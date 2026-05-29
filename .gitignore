@@ -10,7 +10,9 @@ tijuana_sin_barreras/.dart_tool/
 tijuana_sin_barreras/build/
 tijuana_sin_barreras/.flutter-plugins
 tijuana_sin_barreras/.flutter-plugins-dependencies
-tijuana_sin_barreras/pubspec.lock
+# pubspec.lock SÍ se versiona: es un app (publish_to: none). Compartirlo
+# garantiza que todo el equipo resuelva las mismas versiones (evita la deriva
+# de google_fonts 6.3.3 -> 6.2.x entre máquinas con distinto SDK).
 
 # ---- Node / Functions ----
 node_modules/

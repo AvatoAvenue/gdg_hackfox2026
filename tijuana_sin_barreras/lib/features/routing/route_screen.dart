@@ -60,6 +60,7 @@ class _RouteScreenState extends State<RouteScreen>
   Set<Circle> _circles = {};
   bool _loading = false;
   bool _speaking = false;
+  bool _locatingOrigin = false;
   String? _routeInfo;
   String? _avoidInfo;
   String? _error;
@@ -105,6 +106,7 @@ class _RouteScreenState extends State<RouteScreen>
     super.initState();
     _loadMarkerIcons();
     _goToUserLocation();
+    _useCurrentLocationAsOrigin();
     _pulseCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -424,6 +426,43 @@ class _RouteScreenState extends State<RouteScreen>
   // Route calculation (from original RouteScreen — _markers renamed to _routeMarkers,
   // _buildBarrierMarkers(RouteResult) renamed to _buildRouteBarrierMarkers)
   // ---------------------------------------------------------------------------
+
+  Future<void> _useCurrentLocationAsOrigin() async {
+    setState(() => _locatingOrigin = true);
+    try {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        if (mounted) setState(() => _locatingOrigin = false);
+        return;
+      }
+
+      final pos = await Geolocator.getCurrentPosition();
+      if (!mounted) return;
+
+      if (_originPlace != null || _originCtrl.text.trim().isNotEmpty) {
+        setState(() => _locatingOrigin = false);
+        return;
+      }
+
+      final latLng = LatLng(pos.latitude, pos.longitude);
+      setState(() {
+        _originPlace = PlaceResult(
+          placeId: '',
+          name: 'Mi ubicación actual',
+          address: 'Ubicación actual',
+          latLng: latLng,
+        );
+        _originCtrl.text = 'Mi ubicación actual';
+        _locatingOrigin = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _locatingOrigin = false);
+    }
+  }
 
   Future<PlaceResult?> _resolveEndpoint(
     PlaceResult? selected,
@@ -829,13 +868,40 @@ class _RouteScreenState extends State<RouteScreen>
           PlaceSearchField(
             mapsService: _maps,
             controller: _originCtrl,
-            hintText: 'Origen  (ej. Centro Civico)',
+            hintText: 'Origen  (ej. Centro Cívico)',
             icon: Icons.trip_origin,
             iconColor: AppColors.success,
             onSelected: (place) => setState(() => _originPlace = place),
             onCleared: () => setState(() => _originPlace = null),
+            onTextChanged: (value) {
+              if (_originPlace != null && value != _originPlace!.name) {
+                setState(() => _originPlace = null);
+              }
+            },
           ),
-          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: _locatingOrigin ? null : _useCurrentLocationAsOrigin,
+              icon: _locatingOrigin
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.brandPassive),
+                    )
+                  : const Icon(Icons.my_location, size: 16),
+              label: Text(
+                _locatingOrigin ? 'Obteniendo ubicación...' : 'Usar mi ubicación',
+              ),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.brandPassive,
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                minimumSize: const Size(0, 32),
+                textStyle: const TextStyle(fontSize: 12),
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
           PlaceSearchField(
             mapsService: _maps,
             controller: _destCtrl,
