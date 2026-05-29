@@ -4,7 +4,6 @@ import 'core/constants/app_text_styles.dart';
 import 'features/auth/login_screen.dart';
 import 'features/auth/profile_screen.dart';
 import 'features/home/home_screen.dart';
-import 'features/map/map_screen.dart';
 import 'features/report/report_barrier_screen.dart';
 import 'features/routing/route_screen.dart';
 
@@ -14,7 +13,7 @@ class TijuanaSinBarrerasApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Tijuana Sin Barreras',
+      title: 'Senda',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
@@ -118,10 +117,11 @@ class TijuanaSinBarrerasApp extends StatelessWidget {
       ),
       initialRoute: '/',
       routes: {
-        '/': (ctx) => const HomeScreen(),
+        '/': (ctx) => const RouteScreen(),
+        '/home': (ctx) => const HomeScreen(),
         '/login': (ctx) => const LoginScreen(),
         '/profile': (ctx) => const ProfileScreen(),
-        '/map': (ctx) => const MapScreen(),
+        '/map': (ctx) => const RouteScreen(),
         '/report': (ctx) => const ReportBarrierScreen(),
         '/route': (ctx) => const RouteScreen(),
       },

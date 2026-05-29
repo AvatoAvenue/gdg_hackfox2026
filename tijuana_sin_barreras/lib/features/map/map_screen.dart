@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
@@ -10,6 +11,7 @@ import '../../core/models/emergency_alert.dart';
 import '../../core/services/firebase_service.dart';
 import '../../core/services/geo_utils.dart';
 import '../../core/services/tts_service.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -28,21 +30,26 @@ class _MapScreenState extends State<MapScreen>
       const LatLng(AppConstants.tijuanaLat, AppConstants.tijuanaLng);
   LatLng? _userPosition;
 
+  // Custom marker icon cache (loaded once in initState)
+  final Map<String, BitmapDescriptor> _iconCache = {};
+
   // SOS
   String? _activeAlertId;
   bool _sendingAlert = false;
   bool _dialogVisible = false;
   final Set<String> _seenAlertIds = {};
+  EmergencyAlert? _selectedEmergency;
   StreamSubscription<List<EmergencyAlert>>? _alertsSub;
 
   // Animaciones del botón SOS
   late AnimationController _pulseCtrl;
-  late Animation<double> _pulseAnim;   // activo: escala 0.92→1.0
+  late Animation<double> _pulseAnim; // activo: escala 0.92→1.0
   late Animation<double> _breatheAnim; // inactivo: respiro sutil 0.977→1.0
 
   @override
   void initState() {
     super.initState();
+    _loadMarkerIcons();
     _goToUserLocation();
     _pulseCtrl = AnimationController(
       vsync: this,
@@ -81,12 +88,7 @@ class _MapScreenState extends State<MapScreen>
                 position: LatLng(a.lat, a.lng),
                 icon: BitmapDescriptor.defaultMarkerWithHue(
                     BitmapDescriptor.hueRed),
-                infoWindow: InfoWindow(
-                  title: '🚨 Emergencia SOS',
-                  snippet: a.userName != null
-                      ? 'Reportado por ${a.userName}'
-                      : 'Persona necesita ayuda',
-                ),
+                onTap: () => setState(() => _selectedEmergency = a),
               ))
           .toSet();
 
@@ -137,26 +139,69 @@ class _MapScreenState extends State<MapScreen>
   // Marcadores de barreras
   // ---------------------------------------------------------------------------
 
+  Future<void> _loadMarkerIcons() async {
+    final results = await Future.wait([
+      _buildIconBitmap(Icons.accessible_forward, AppColors.warning),
+      _buildIconBitmap(Icons.warning_rounded, AppColors.error),
+      _buildIconBitmap(Icons.traffic, const Color(0xFF9334E6)),
+      _buildIconBitmap(Icons.check_circle_outline, AppColors.success),
+      _buildIconBitmap(Icons.report_problem_rounded, AppColors.darkMid),
+    ]);
+    _iconCache['Rampa faltante'] = results[0];
+    _iconCache['Banqueta dañada'] = results[1];
+    _iconCache['Semáforo sin sonido'] = results[2];
+    _iconCache['resolved'] = results[3];
+    _iconCache['other'] = results[4];
+    if (mounted) setState(() {});
+  }
+
+  Future<BitmapDescriptor> _buildIconBitmap(IconData icon, Color bg) async {
+    const size = 48.0;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder, const Rect.fromLTWH(0, 0, size, size));
+    canvas.drawCircle(
+      const Offset(size / 2, size / 2),
+      size / 2,
+      Paint()..color = bg,
+    );
+    final tp = TextPainter(textDirection: TextDirection.ltr)
+      ..text = TextSpan(
+        text: String.fromCharCode(icon.codePoint),
+        style: TextStyle(
+          fontSize: 26,
+          fontFamily: icon.fontFamily,
+          package: icon.fontPackage,
+          color: Colors.white,
+        ),
+      )
+      ..layout();
+    tp.paint(canvas, Offset((size - tp.width) / 2, (size - tp.height) / 2));
+    final image =
+        await recorder.endRecording().toImage(size.toInt(), size.toInt());
+    final data = await image.toByteData(format: ui.ImageByteFormat.png);
+    return BitmapDescriptor.bytes(data!.buffer.asUint8List());
+  }
+
+  BitmapDescriptor _iconFor(BarrierReport b) {
+    if (b.status == 'resolved') {
+      return _iconCache['resolved'] ??
+          BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
+    }
+    return _iconCache[b.type] ??
+        _iconCache['other'] ??
+        BitmapDescriptor.defaultMarker;
+  }
+
   Set<Marker> _buildBarrierMarkers(List<BarrierReport> barriers) {
     return barriers.map((b) {
       return Marker(
         markerId: MarkerId(b.id),
         position: LatLng(b.lat, b.lng),
-        icon: BitmapDescriptor.defaultMarkerWithHue(_hueFor(b)),
+        icon: _iconFor(b),
         infoWindow: InfoWindow(title: b.type),
         onTap: () => setState(() => _selectedBarrier = b),
       );
     }).toSet();
-  }
-
-  double _hueFor(BarrierReport b) {
-    if (b.status == 'resolved') return BitmapDescriptor.hueGreen;
-    return switch (b.type) {
-      'Rampa faltante' => BitmapDescriptor.hueOrange,
-      'Banqueta dañada' => BitmapDescriptor.hueRed,
-      'Semáforo sin sonido' => BitmapDescriptor.hueViolet,
-      _ => BitmapDescriptor.hueYellow,
-    };
   }
 
   // ---------------------------------------------------------------------------
@@ -169,7 +214,7 @@ class _MapScreenState extends State<MapScreen>
       builder: (ctx) => AlertDialog(
         title: const Row(
           children: [
-            Icon(Icons.sos, color: AppColors.danger, size: 28),
+            Icon(Icons.sos, color: AppColors.error, size: 28),
             SizedBox(width: 8),
             Text('Enviar Alerta SOS'),
           ],
@@ -186,10 +231,10 @@ class _MapScreenState extends State<MapScreen>
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.danger,
+              backgroundColor: AppColors.error,
               foregroundColor: Colors.white,
             ),
-            child: const Text('Enviar SOS'),
+            child: Text('Enviar SOS', style: GoogleFonts.lexend()),
           ),
         ],
       ),
@@ -226,7 +271,7 @@ class _MapScreenState extends State<MapScreen>
         const SnackBar(
           content:
               Text('🚨 Alerta SOS enviada. Personas cercanas notificadas.'),
-          backgroundColor: AppColors.danger,
+          backgroundColor: AppColors.error,
           duration: Duration(seconds: 4),
         ),
       );
@@ -236,7 +281,7 @@ class _MapScreenState extends State<MapScreen>
       messenger.showSnackBar(
         SnackBar(
           content: Text('Error al enviar alerta: $e'),
-          backgroundColor: AppColors.danger,
+          backgroundColor: AppColors.error,
         ),
       );
     }
@@ -258,7 +303,7 @@ class _MapScreenState extends State<MapScreen>
       messenger.showSnackBar(
         SnackBar(
             content: Text('Error al cancelar: $e'),
-            backgroundColor: AppColors.danger),
+            backgroundColor: AppColors.error),
       );
     }
   }
@@ -279,7 +324,7 @@ class _MapScreenState extends State<MapScreen>
       builder: (ctx) => AlertDialog(
         title: const Row(
           children: [
-            Icon(Icons.warning_rounded, color: AppColors.danger, size: 28),
+            Icon(Icons.warning_rounded, color: AppColors.error, size: 28),
             SizedBox(width: 8),
             Text('¡Emergencia cercana!'),
           ],
@@ -299,7 +344,7 @@ class _MapScreenState extends State<MapScreen>
               _moveCameraToAlert(alert);
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.danger,
+              backgroundColor: AppColors.error,
               foregroundColor: Colors.white,
             ),
             child: const Text('Ir a ayudar'),
@@ -328,8 +373,7 @@ class _MapScreenState extends State<MapScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Mapa de Barreras'),
-        backgroundColor: AppColors.primary,
+        title: Text('Mapa de Barreras', style: GoogleFonts.lexend()),
         actions: [
           IconButton(
             icon: const Icon(Icons.my_location),
@@ -355,7 +399,10 @@ class _MapScreenState extends State<MapScreen>
                 myLocationEnabled: true,
                 myLocationButtonEnabled: false,
                 zoomControlsEnabled: false,
-                onTap: (_) => setState(() => _selectedBarrier = null),
+                onTap: (_) => setState(() {
+                  _selectedBarrier = null;
+                  _selectedEmergency = null;
+                }),
               ),
               _buildLegend(),
               if (snap.connectionState == ConnectionState.waiting)
@@ -366,6 +413,14 @@ class _MapScreenState extends State<MapScreen>
                   child: _BarrierSheet(
                     barrier: _selectedBarrier!,
                     onClose: () => setState(() => _selectedBarrier = null),
+                  ),
+                ),
+              if (_selectedEmergency != null)
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: _SosSheet(
+                    alert: _selectedEmergency!,
+                    onClose: () => setState(() => _selectedEmergency = null),
                   ),
                 ),
             ],
@@ -383,7 +438,7 @@ class _MapScreenState extends State<MapScreen>
             onPressed: () => Navigator.pushNamed(context, '/report'),
             icon: const Icon(Icons.add_location_alt),
             label: const Text('Reportar'),
-            backgroundColor: AppColors.primary,
+            backgroundColor: AppColors.brandActive,
             foregroundColor: Colors.white,
             tooltip: 'Reportar una barrera de accesibilidad',
           ),
@@ -462,8 +517,8 @@ class _MapScreenState extends State<MapScreen>
                       )
                     : Icon(
                         isActive
-                            ? Icons.cancel_outlined   // ✕  forma clara
-                            : Icons.warning_rounded,  // ▲  forma clara
+                            ? Icons.cancel_outlined // ✕  forma clara
+                            : Icons.warning_rounded, // ▲  forma clara
                         color: Colors.white,
                         size: 32,
                       ),
@@ -512,21 +567,103 @@ class _MapScreenState extends State<MapScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.darkMid,
           borderRadius: BorderRadius.circular(10),
-          boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)],
+          border:
+              Border.all(color: AppColors.brandPassive.withValues(alpha: 0.25)),
+          boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6)],
         ),
         child: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _LegendRow(color: Colors.orange, label: 'Rampa faltante'),
-            _LegendRow(color: Colors.red, label: 'Banqueta dañada'),
-            _LegendRow(color: Colors.purple, label: 'Semáforo'),
-            _LegendRow(color: Colors.amber, label: 'Otro'),
-            _LegendRow(color: Colors.green, label: 'Resuelto'),
-            _LegendRow(color: AppColors.danger, label: '🚨 SOS'),
+            _LegendRow(
+                icon: Icons.accessible_forward,
+                color: Colors.orange,
+                label: 'Rampa faltante'),
+            _LegendRow(
+                icon: Icons.warning_rounded,
+                color: Colors.red,
+                label: 'Banqueta dañada'),
+            _LegendRow(
+                icon: Icons.traffic, color: Colors.purple, label: 'Semáforo'),
+            _LegendRow(
+                icon: Icons.report_problem_rounded,
+                color: Colors.amber,
+                label: 'Otro'),
+            _LegendRow(
+                icon: Icons.check_circle_outline,
+                color: Colors.green,
+                label: 'Resuelto'),
+            _LegendRow(icon: Icons.sos, color: AppColors.error, label: 'SOS'),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SOS overlay sheet
+// ---------------------------------------------------------------------------
+
+class _SosSheet extends StatelessWidget {
+  final EmergencyAlert alert;
+  final VoidCallback onClose;
+
+  const _SosSheet({required this.alert, required this.onClose});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.darkMid,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.45)),
+        boxShadow: const [
+          BoxShadow(
+              color: Colors.black26, blurRadius: 16, offset: Offset(0, -2)),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.sos, color: AppColors.error, size: 22),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '🚨 Emergencia SOS',
+                  style: GoogleFonts.lexend(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.error,
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: onClose,
+                icon: const Icon(Icons.close, color: AppColors.surfacePositive),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: 'Cerrar',
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            alert.userName != null
+                ? 'Reportado por ${alert.userName}'
+                : 'Persona necesita ayuda',
+            style: TextStyle(
+              color: AppColors.surfacePositive.withValues(alpha: 0.8),
+              fontSize: 14,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -537,9 +674,11 @@ class _MapScreenState extends State<MapScreen>
 // ---------------------------------------------------------------------------
 
 class _LegendRow extends StatelessWidget {
+  final IconData icon;
   final Color color;
   final String label;
-  const _LegendRow({required this.color, required this.label});
+  const _LegendRow(
+      {required this.icon, required this.color, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -548,13 +687,13 @@ class _LegendRow extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
+          Icon(icon, color: color, size: 14),
           const SizedBox(width: 6),
-          Text(label, style: const TextStyle(fontSize: 11)),
+          Text(
+            label,
+            style:
+                const TextStyle(fontSize: 11, color: AppColors.surfacePositive),
+          ),
         ],
       ),
     );
@@ -606,10 +745,13 @@ class _BarrierSheetState extends State<_BarrierSheet> {
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.darkMid,
         borderRadius: BorderRadius.circular(20),
+        border:
+            Border.all(color: AppColors.brandPassive.withValues(alpha: 0.25)),
         boxShadow: const [
-          BoxShadow(color: Colors.black26, blurRadius: 16, offset: Offset(0, -2))
+          BoxShadow(
+              color: Colors.black26, blurRadius: 16, offset: Offset(0, -2))
         ],
       ),
       child: Column(
@@ -622,7 +764,9 @@ class _BarrierSheetState extends State<_BarrierSheet> {
                 child: Text(
                   widget.barrier.type,
                   style: const TextStyle(
-                      fontSize: 17, fontWeight: FontWeight.w700),
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.surfacePositive),
                 ),
               ),
               IconButton(
@@ -630,16 +774,15 @@ class _BarrierSheetState extends State<_BarrierSheet> {
                 icon: Icon(_speaking
                     ? Icons.stop_circle_outlined
                     : Icons.volume_up_outlined),
-                color: AppColors.primary,
-                tooltip:
-                    _speaking ? 'Detener lectura' : 'Escuchar barrera',
+                color: AppColors.brandActive,
+                tooltip: _speaking ? 'Detener lectura' : 'Escuchar barrera',
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
               ),
               const SizedBox(width: 4),
               IconButton(
                 onPressed: widget.onClose,
-                icon: const Icon(Icons.close),
+                icon: const Icon(Icons.close, color: AppColors.surfacePositive),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
                 tooltip: 'Cerrar',
@@ -648,9 +791,12 @@ class _BarrierSheetState extends State<_BarrierSheet> {
           ),
           if (widget.barrier.description.isNotEmpty) ...[
             const SizedBox(height: 6),
-            Text(widget.barrier.description,
-                style:
-                    const TextStyle(color: AppColors.muted, fontSize: 14)),
+            Text(
+              widget.barrier.description,
+              style: TextStyle(
+                  color: AppColors.surfacePositive.withValues(alpha: 0.65),
+                  fontSize: 14),
+            ),
           ],
           if (widget.barrier.photoBytes != null) ...[
             const SizedBox(height: 12),
@@ -685,20 +831,22 @@ class _GeminiAnalysisBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.primary.withValues(alpha: 0.06),
+        color: AppColors.brandActive.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+        border:
+            Border.all(color: AppColors.brandActive.withValues(alpha: 0.25)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.auto_awesome, color: AppColors.primary, size: 16),
+          const Icon(Icons.auto_awesome,
+              color: AppColors.brandActive, size: 16),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               analysis,
               style: const TextStyle(
-                  fontSize: 12, color: AppColors.onSurface, height: 1.4),
+                  fontSize: 12, color: AppColors.surfacePositive, height: 1.4),
             ),
           ),
         ],
@@ -714,8 +862,8 @@ class _StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color) = switch (status) {
-      'resolved' => ('Resuelto', AppColors.secondary),
-      'verified' => ('Verificado', AppColors.primary),
+      'resolved' => ('Resuelto', AppColors.success),
+      'verified' => ('Verificado', AppColors.brandActive),
       _ => ('Pendiente revisión', AppColors.warning),
     };
 
@@ -727,9 +875,7 @@ class _StatusBadge extends StatelessWidget {
       ),
       child: Text(label,
           style: TextStyle(
-              fontSize: 12,
-              color: color,
-              fontWeight: FontWeight.w600)),
+              fontSize: 12, color: color, fontWeight: FontWeight.w600)),
     );
   }
 }

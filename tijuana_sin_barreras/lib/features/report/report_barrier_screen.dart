@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_constants.dart';
@@ -126,7 +127,7 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
               content: Text(
                 'La foto es demasiado grande. Toma otra con menor resolución.',
               ),
-              backgroundColor: AppColors.danger,
+              backgroundColor: AppColors.error,
             ),
           );
           setState(() => _submitting = false);
@@ -152,7 +153,7 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Barrera reportada. ¡Gracias por ayudar!'),
-            backgroundColor: AppColors.secondary,
+            backgroundColor: AppColors.success,
           ),
         );
         Navigator.pop(context);
@@ -160,7 +161,9 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al enviar: $e'), backgroundColor: AppColors.danger),
+          SnackBar(
+              content: Text('Error al enviar: $e'),
+              backgroundColor: AppColors.error),
         );
       }
     } finally {
@@ -171,9 +174,9 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.surfaceNeutral,
       appBar: AppBar(
         title: const Text('Reportar Barrera'),
-        backgroundColor: AppColors.danger,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -214,7 +217,6 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
               decoration: const InputDecoration(
                 hintText: 'Describe la barrera con más detalle...',
                 filled: true,
-                fillColor: Color(0xFFF8F9FA),
               ),
             ),
             const SizedBox(height: 32),
@@ -227,7 +229,14 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
   }
 
   Widget _buildLabel(String text) {
-    return Text(text, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15));
+    return Text(
+      text,
+      style: const TextStyle(
+        fontWeight: FontWeight.w600,
+        fontSize: 15,
+        color: AppColors.darkDeep,
+      ),
+    );
   }
 
   Widget _buildLocationBadge() {
@@ -235,14 +244,14 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: (hasLocation ? AppColors.secondary : AppColors.warning).withOpacity(0.1),
+        color: AppColors.darkMid,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         children: [
           Icon(
             hasLocation ? Icons.location_on : Icons.location_searching,
-            color: hasLocation ? AppColors.secondary : AppColors.warning,
+            color: hasLocation ? AppColors.surfaceNeutral : AppColors.warning,
             size: 20,
           ),
           const SizedBox(width: 8),
@@ -251,10 +260,10 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
               hasLocation
                   ? '${_position!.latitude.toStringAsFixed(5)}, ${_position!.longitude.toStringAsFixed(5)}'
                   : 'Obteniendo tu ubicación...',
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
-                color: hasLocation ? AppColors.secondary : AppColors.warning,
+                color: AppColors.surfaceNeutral,
               ),
             ),
           ),
@@ -265,19 +274,24 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
 
   Widget _buildTypeChips() {
     return Wrap(
-      spacing: 8,
+      spacing: 15,
       runSpacing: 8,
       children: AppConstants.barrierTypes.map((type) {
         final selected = _selectedType == type;
-        return FilterChip(
-          label: Text(type),
-          selected: selected,
-          onSelected: (_) => _onTypeSelected(type),
-          selectedColor: AppColors.danger.withOpacity(0.15),
-          checkmarkColor: AppColors.danger,
-          labelStyle: TextStyle(
-            color: selected ? AppColors.danger : AppColors.onSurface,
-            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+        return Transform.scale(
+          scale: selected ? 1.1 : 1.0,
+          child: FilterChip(
+            label: Text(
+              type,
+              style: GoogleFonts.lexend(
+                color: selected ? AppColors.surfaceNeutral : AppColors.darkMid,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+            selected: selected,
+            onSelected: (_) => _onTypeSelected(type),
+            selectedColor: AppColors.darkMid.withValues(alpha: 1),
+            checkmarkColor: AppColors.surfaceNeutral,
           ),
         );
       }).toList(),
@@ -301,12 +315,14 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
           Container(
             height: 140,
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade300),
+              border: Border.all(
+                  color: AppColors.brandPassive.withValues(alpha: 0.5)),
               borderRadius: BorderRadius.circular(12),
-              color: Colors.grey.shade50,
+              color: AppColors.darkMid,
             ),
             child: const Center(
-              child: Icon(Icons.add_photo_alternate_outlined, size: 42, color: AppColors.muted),
+              child: Icon(Icons.add_photo_alternate_outlined,
+                  size: 42, color: AppColors.brandPassive),
             ),
           ),
         const SizedBox(height: 12),
@@ -317,6 +333,10 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
                 onPressed: () => _pickPhoto(ImageSource.camera),
                 icon: const Icon(Icons.camera_alt_outlined),
                 label: const Text('Cámara'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.darkMid,
+                  side: const BorderSide(color: AppColors.darkMid),
+                ),
               ),
             ),
             const SizedBox(width: 10),
@@ -325,6 +345,10 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
                 onPressed: () => _pickPhoto(ImageSource.gallery),
                 icon: const Icon(Icons.photo_library_outlined),
                 label: const Text('Galería'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.darkMid,
+                  side: const BorderSide(color: AppColors.darkMid),
+                ),
               ),
             ),
           ],
@@ -339,12 +363,13 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
         SizedBox(
           width: 16,
           height: 16,
-          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+          child: CircularProgressIndicator(
+              strokeWidth: 2, color: AppColors.brandActive),
         ),
         SizedBox(width: 8),
         Text(
           'Gemini AI verificando la foto...',
-          style: TextStyle(fontSize: 13, color: AppColors.muted),
+          style: TextStyle(fontSize: 13, color: AppColors.darkMid),
         ),
       ],
     );
@@ -352,16 +377,16 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
 
   /// Badge que indica si la foto coincide o no con el tipo seleccionado.
   Widget _buildMatchBadge(BarrierPhotoValidation v) {
-    final color = v.matches ? AppColors.secondary : AppColors.warning;
+    final color = v.matches ? AppColors.success : AppColors.warning;
     final title = v.matches
         ? 'La foto coincide con "$_selectedType"'
         : 'La foto no parece ser "$_selectedType"';
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.4)),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -369,7 +394,9 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
           Row(
             children: [
               Icon(
-                v.matches ? Icons.verified_rounded : Icons.warning_amber_rounded,
+                v.matches
+                    ? Icons.verified_rounded
+                    : Icons.warning_amber_rounded,
                 color: color,
                 size: 18,
               ),
@@ -396,7 +423,11 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
           ),
           if (v.message.isNotEmpty) ...[
             const SizedBox(height: 6),
-            Text(v.message, style: const TextStyle(fontSize: 13, height: 1.4)),
+            Text(
+              v.message,
+              style: const TextStyle(
+                  fontSize: 13, height: 1.4, color: AppColors.darkDeep),
+            ),
           ],
           if (!v.matches && v.detectedType.isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -427,19 +458,22 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.muted.withOpacity(0.08),
+        color: AppColors.darkMid.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.muted.withOpacity(0.3)),
+        border:
+            Border.all(color: AppColors.brandPassive.withValues(alpha: 0.30)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.cloud_off_rounded, color: AppColors.muted, size: 18),
+          const Icon(Icons.cloud_off_rounded,
+              color: AppColors.brandPassive, size: 18),
           const SizedBox(width: 8),
           const Expanded(
             child: Text(
               'No se pudo verificar la foto con Gemini. Revisa tu conexión o la '
               'configuración de la API. El reporte se puede enviar sin verificar.',
-              style: TextStyle(fontSize: 13, height: 1.4, color: AppColors.muted),
+              style: TextStyle(
+                  fontSize: 13, height: 1.4, color: AppColors.darkDeep),
             ),
           ),
           TextButton(
@@ -469,7 +503,7 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.danger,
+              backgroundColor: AppColors.error,
               foregroundColor: Colors.white,
             ),
             child: const Text('Enviar igual'),
@@ -483,25 +517,33 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.primary.withOpacity(0.05),
+        color: AppColors.darkMid,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.primary.withOpacity(0.25)),
+        border:
+            Border.all(color: AppColors.brandPassive.withValues(alpha: 0.25)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Row(
             children: [
-              Icon(Icons.auto_awesome, color: AppColors.primary, size: 16),
+              Icon(Icons.auto_awesome, color: AppColors.brandActive, size: 16),
               SizedBox(width: 6),
               Text(
                 'Análisis de Gemini AI',
-                style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.primary, fontSize: 13),
+                style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.brandActive,
+                    fontSize: 13),
               ),
             ],
           ),
           const SizedBox(height: 8),
-          Text(analysis, style: const TextStyle(fontSize: 13, height: 1.5)),
+          Text(
+            analysis,
+            style: const TextStyle(
+                fontSize: 13, height: 1.5, color: AppColors.surfacePositive),
+          ),
         ],
       ),
     );
@@ -511,15 +553,16 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
     return ElevatedButton.icon(
       onPressed: _submitting ? null : _submit,
       style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.danger,
+        backgroundColor: AppColors.darkMid,
         foregroundColor: Colors.white,
-        disabledBackgroundColor: AppColors.danger.withOpacity(0.5),
+        minimumSize: const Size(double.infinity, 50),
       ),
       icon: _submitting
           ? const SizedBox(
               width: 18,
               height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: Colors.white),
             )
           : const Icon(Icons.send_rounded),
       label: Text(_submitting ? 'Enviando...' : 'Reportar barrera'),

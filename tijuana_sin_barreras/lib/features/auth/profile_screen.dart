@@ -14,10 +14,9 @@ class ProfileScreen extends StatelessWidget {
     final firebase = context.read<FirebaseService>();
 
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: AppColors.surfaceNeutral,
       appBar: AppBar(
         title: const Text('Mi perfil'),
-        backgroundColor: AppColors.primary,
       ),
       body: StreamBuilder<UserProfile?>(
         stream: firebase.watchCurrentProfile(),
@@ -42,19 +41,18 @@ class ProfileScreen extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.person_off_outlined, size: 48, color: AppColors.muted),
+            const Icon(Icons.person_off_outlined, size: 48, color: AppColors.brandPassive),
             const SizedBox(height: 16),
             Text(
               'No has iniciado sesión',
-              style: Theme.of(context).textTheme.titleLarge,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(color: AppColors.darkDeep),
             ),
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: () => Navigator.pushReplacementNamed(context, '/login'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-              ),
               child: const Text('Iniciar sesión'),
             ),
           ],
@@ -79,7 +77,10 @@ class ProfileScreen extends StatelessWidget {
           Center(
             child: Text(
               profile.displayName,
-              style: Theme.of(context).textTheme.headlineMedium,
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineMedium
+                  ?.copyWith(color: AppColors.darkDeep),
             ),
           ),
           if (profile.email != null) ...[
@@ -87,7 +88,10 @@ class ProfileScreen extends StatelessWidget {
             Center(
               child: Text(
                 profile.email!,
-                style: Theme.of(context).textTheme.bodyMedium,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: AppColors.darkMid),
               ),
             ),
           ],
@@ -95,11 +99,13 @@ class ProfileScreen extends StatelessWidget {
           Center(child: _buildRoleBadge(profile)),
           const SizedBox(height: 32),
           _buildInfoTile(
+            context: context,
             icon: Icons.calendar_today_outlined,
             label: 'Miembro desde',
             value: _formatDate(profile.createdAt),
           ),
           _buildInfoTile(
+            context: context,
             icon: Icons.shield_outlined,
             label: 'Rol',
             value: profile.isModerator ? 'Moderador' : 'Ciudadano',
@@ -109,8 +115,8 @@ class ProfileScreen extends StatelessWidget {
             onPressed: () => _confirmSignOut(context, firebase),
             style: OutlinedButton.styleFrom(
               minimumSize: const Size(double.infinity, 56),
-              foregroundColor: AppColors.danger,
-              side: const BorderSide(color: AppColors.danger),
+              foregroundColor: AppColors.error,
+              side: const BorderSide(color: AppColors.error),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             icon: const Icon(Icons.logout),
@@ -128,7 +134,7 @@ class ProfileScreen extends StatelessWidget {
     return Center(
       child: CircleAvatar(
         radius: 48,
-        backgroundColor: AppColors.primary.withOpacity(0.1),
+        backgroundColor: AppColors.brandActive,
         backgroundImage:
             profile.photoUrl != null ? NetworkImage(profile.photoUrl!) : null,
         child: profile.photoUrl == null
@@ -137,7 +143,7 @@ class ProfileScreen extends StatelessWidget {
                 style: const TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.primary,
+                  color: Colors.white,
                 ),
               )
             : null,
@@ -147,21 +153,28 @@ class ProfileScreen extends StatelessWidget {
 
   Widget _buildRoleBadge(UserProfile profile) {
     final isMod = profile.isModerator;
-    final color = isMod ? AppColors.secondary : AppColors.primary;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: AppColors.surfacePositive,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(isMod ? Icons.verified : Icons.person, size: 16, color: color),
+          Icon(
+            isMod ? Icons.verified : Icons.person,
+            size: 16,
+            color: AppColors.darkDeep,
+          ),
           const SizedBox(width: 6),
           Text(
             isMod ? 'Moderador' : 'Ciudadano',
-            style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 13),
+            style: const TextStyle(
+              color: AppColors.darkDeep,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
           ),
         ],
       ),
@@ -169,6 +182,7 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Widget _buildInfoTile({
+    required BuildContext context,
     required IconData icon,
     required String label,
     required String value,
@@ -177,19 +191,28 @@ class ProfileScreen extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.darkMid,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(
+            color: AppColors.brandPassive.withValues(alpha: 0.25)),
       ),
       child: Row(
         children: [
-          Icon(icon, color: AppColors.muted, size: 22),
+          Icon(icon, color: AppColors.brandPassive, size: 22),
           const SizedBox(width: 14),
-          Text(label, style: const TextStyle(color: AppColors.muted, fontSize: 14)),
+          Text(
+            label,
+            style: const TextStyle(
+                color: AppColors.surfacePositive, fontSize: 14),
+          ),
           const Spacer(),
           Text(
             value,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              color: AppColors.surfacePositive,
+            ),
           ),
         ],
       ),
@@ -212,7 +235,7 @@ class ProfileScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
             child: const Text('Salir'),
           ),
         ],
