@@ -9,6 +9,7 @@ import '../../core/models/place_models.dart';
 import '../../core/models/route_result.dart';
 import '../../core/services/firebase_service.dart';
 import '../../core/services/maps_service.dart';
+import '../../core/services/tts_service.dart';
 import '../../shared/widgets/place_search_field.dart';
 
 class RouteScreen extends StatefulWidget {
@@ -31,6 +32,7 @@ class _RouteScreenState extends State<RouteScreen> {
   Set<Marker> _markers = {};
   Set<Circle> _circles = {};
   bool _loading = false;
+  bool _speaking = false;
   String? _routeInfo;
   String? _avoidInfo;
   String? _error;
@@ -134,6 +136,8 @@ class _RouteScreenState extends State<RouteScreen> {
         _avoidInfo = _buildAvoidInfo(result);
         _loading = false;
       });
+
+      _speakRouteInfo();
 
       // Encuadrar la ruta en el mapa. Va en su propio try/catch: en web
       // animateCamera(newLatLngBounds) puede lanzar y NO debe ocultar una
@@ -257,6 +261,21 @@ class _RouteScreenState extends State<RouteScreen> {
   }
 
   String _obstWord(int n) => n == 1 ? 'obstáculo' : 'obstáculos';
+
+  Future<void> _speakRouteInfo() async {
+    if (_routeInfo == null) return;
+    final tts = context.read<TtsService>();
+    if (_speaking) {
+      await tts.stop();
+      if (mounted) setState(() => _speaking = false);
+      return;
+    }
+    setState(() => _speaking = true);
+    final text =
+        '${_routeInfo!.replaceAll('·', ',')}. ${_avoidInfo ?? ''}'.trim();
+    await tts.speak(text);
+    if (mounted) setState(() => _speaking = false);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -483,6 +502,18 @@ class _RouteScreenState extends State<RouteScreen> {
           const Text(
             'Ruta peatonal',
             style: TextStyle(fontSize: 12, color: AppColors.secondary),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: _speakRouteInfo,
+            icon: Icon(
+              _speaking ? Icons.stop_circle_outlined : Icons.volume_up_outlined,
+            ),
+            color: AppColors.secondary,
+            iconSize: 20,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            tooltip: _speaking ? 'Detener lectura' : 'Escuchar ruta',
           ),
         ],
       ),

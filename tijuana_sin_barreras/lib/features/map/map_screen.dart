@@ -7,6 +7,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/models/barrier_report.dart';
 import '../../core/services/firebase_service.dart';
+import '../../core/services/tts_service.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -175,11 +176,45 @@ class _LegendRow extends StatelessWidget {
   }
 }
 
-class _BarrierSheet extends StatelessWidget {
+class _BarrierSheet extends StatefulWidget {
   final BarrierReport barrier;
   final VoidCallback onClose;
 
   const _BarrierSheet({required this.barrier, required this.onClose});
+
+  @override
+  State<_BarrierSheet> createState() => _BarrierSheetState();
+}
+
+class _BarrierSheetState extends State<_BarrierSheet> {
+  bool _speaking = false;
+
+  Future<void> _toggleSpeak() async {
+    final tts = context.read<TtsService>();
+    if (_speaking) {
+      await tts.stop();
+      if (mounted) setState(() => _speaking = false);
+      return;
+    }
+    setState(() => _speaking = true);
+    final text = _buildSpeechText(widget.barrier);
+    await tts.speak(text);
+    if (mounted) setState(() => _speaking = false);
+  }
+
+  String _buildSpeechText(BarrierReport b) {
+    final parts = <String>['Barrera: ${b.type}'];
+    if (b.description.isNotEmpty) parts.add(b.description);
+    if (b.geminiAnalysis != null) {
+      parts.add(b.geminiAnalysis!.replaceAll(RegExp(r'[\[\]→]'), ''));
+    }
+    parts.add(switch (b.status) {
+      'resolved' => 'Estado: resuelto',
+      'verified' => 'Estado: verificado',
+      _ => 'Estado: pendiente de revisión',
+    });
+    return parts.join('. ');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -199,12 +234,21 @@ class _BarrierSheet extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  barrier.type,
+                  widget.barrier.type,
                   style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
                 ),
               ),
               IconButton(
-                onPressed: onClose,
+                onPressed: _toggleSpeak,
+                icon: Icon(_speaking ? Icons.stop_circle_outlined : Icons.volume_up_outlined),
+                color: AppColors.primary,
+                tooltip: _speaking ? 'Detener lectura' : 'Escuchar barrera',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                onPressed: widget.onClose,
                 icon: const Icon(Icons.close),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
@@ -212,28 +256,28 @@ class _BarrierSheet extends StatelessWidget {
               ),
             ],
           ),
-          if (barrier.description.isNotEmpty) ...[
+          if (widget.barrier.description.isNotEmpty) ...[
             const SizedBox(height: 6),
-            Text(barrier.description, style: const TextStyle(color: AppColors.muted, fontSize: 14)),
+            Text(widget.barrier.description, style: const TextStyle(color: AppColors.muted, fontSize: 14)),
           ],
-          if (barrier.photoBytes != null) ...[
+          if (widget.barrier.photoBytes != null) ...[
             const SizedBox(height: 12),
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: Image.memory(
-                barrier.photoBytes!,
+                widget.barrier.photoBytes!,
                 height: 180,
                 width: double.infinity,
                 fit: BoxFit.cover,
               ),
             ),
           ],
-          if (barrier.geminiAnalysis != null) ...[
+          if (widget.barrier.geminiAnalysis != null) ...[
             const SizedBox(height: 12),
-            _GeminiAnalysisBadge(analysis: barrier.geminiAnalysis!),
+            _GeminiAnalysisBadge(analysis: widget.barrier.geminiAnalysis!),
           ],
           const SizedBox(height: 12),
-          _StatusBadge(status: barrier.status),
+          _StatusBadge(status: widget.barrier.status),
         ],
       ),
     );

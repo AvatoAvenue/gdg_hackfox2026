@@ -44,6 +44,9 @@ dependencies:
   # Fonts
   google_fonts: ^6.3.3 # 6.3.0 rompe con Dart >=3.11 (const Map<FontWeight>)
 
+  # Text-to-Speech (accesibilidad auditiva)
+  flutter_tts: ^4.2.0
+
   # SVG (used for optional vector logo asset)
   flutter_svg: ^2.0.10
 
