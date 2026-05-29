@@ -22,7 +22,8 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
   Uint8List? _photoBytes;
   bool _submitting = false;
   bool _analyzing = false;
-  String? _geminiResult;
+  BarrierPhotoValidation? _validation;
+  bool _validationFailed = false;
   Position? _position;
 
   @override
@@ -50,21 +51,48 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
     final bytes = await xFile.readAsBytes();
     setState(() {
       _photoBytes = bytes;
-      _geminiResult = null;
+      _validation = null;
+      _validationFailed = false;
     });
-    await _analyzeWithGemini();
+    await _validatePhoto();
   }
 
-  Future<void> _analyzeWithGemini() async {
+  /// Pide a Gemini que confirme si la foto corresponde al tipo seleccionado.
+  Future<void> _validatePhoto() async {
     if (_photoBytes == null) return;
-    setState(() => _analyzing = true);
+    setState(() {
+      _analyzing = true;
+      _validationFailed = false;
+    });
     try {
-      final result = await context.read<GeminiService>().analyzeBarrierPhoto(_photoBytes!);
-      if (mounted) setState(() => _geminiResult = result);
+      final result = await context
+          .read<GeminiService>()
+          .validateBarrierPhoto(_photoBytes!, _selectedType);
+      if (mounted) {
+        setState(() {
+          _validation = result;
+          // result == null => la API no respondió correctamente.
+          _validationFailed = result == null;
+        });
+      }
     } catch (_) {
+      if (mounted) setState(() => _validationFailed = true);
     } finally {
       if (mounted) setState(() => _analyzing = false);
     }
+  }
+
+  void _onTypeSelected(String type) {
+    if (type == _selectedType) return;
+    setState(() {
+      _selectedType = type;
+      // Si ya hay foto, revalidamos contra el nuevo tipo seleccionado.
+      if (_photoBytes != null) {
+        _validation = null;
+        _validationFailed = false;
+      }
+    });
+    if (_photoBytes != null) _validatePhoto();
   }
 
   Future<void> _submit() async {
@@ -73,6 +101,13 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
         const SnackBar(content: Text('Esperando ubicación GPS...')),
       );
       return;
+    }
+
+    // Si Gemini detectó que la foto no corresponde al tipo seleccionado,
+    // pedimos confirmación antes de enviar.
+    if (_validation != null && !_validation!.matches) {
+      final proceed = await _confirmMismatch();
+      if (proceed != true || !mounted) return;
     }
 
     setState(() => _submitting = true);
@@ -110,7 +145,7 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
         type: _selectedType,
         description: description,
         photoBase64: photoBase64,
-        geminiAnalysis: _geminiResult,
+        geminiAnalysis: _validation?.analysis,
       );
 
       if (mounted) {
@@ -158,9 +193,17 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
               const SizedBox(height: 10),
               _buildAnalyzingIndicator(),
             ],
-            if (_geminiResult != null) ...[
+            if (_validation != null) ...[
               const SizedBox(height: 16),
-              _buildGeminiResult(),
+              _buildMatchBadge(_validation!),
+              if (_validation!.analysis != null) ...[
+                const SizedBox(height: 12),
+                _buildGeminiResult(_validation!.analysis!),
+              ],
+            ],
+            if (_validationFailed) ...[
+              const SizedBox(height: 16),
+              _buildValidationError(),
             ],
             const SizedBox(height: 24),
             _buildLabel('Descripción adicional'),
@@ -229,7 +272,7 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
         return FilterChip(
           label: Text(type),
           selected: selected,
-          onSelected: (_) => setState(() => _selectedType = type),
+          onSelected: (_) => _onTypeSelected(type),
           selectedColor: AppColors.danger.withOpacity(0.15),
           checkmarkColor: AppColors.danger,
           labelStyle: TextStyle(
@@ -300,14 +343,143 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
         ),
         SizedBox(width: 8),
         Text(
-          'Gemini AI analizando la imagen...',
+          'Gemini AI verificando la foto...',
           style: TextStyle(fontSize: 13, color: AppColors.muted),
         ),
       ],
     );
   }
 
-  Widget _buildGeminiResult() {
+  /// Badge que indica si la foto coincide o no con el tipo seleccionado.
+  Widget _buildMatchBadge(BarrierPhotoValidation v) {
+    final color = v.matches ? AppColors.secondary : AppColors.warning;
+    final title = v.matches
+        ? 'La foto coincide con "$_selectedType"'
+        : 'La foto no parece ser "$_selectedType"';
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                v.matches ? Icons.verified_rounded : Icons.warning_amber_rounded,
+                color: color,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              Text(
+                '${v.confidence}%',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+          if (v.message.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(v.message, style: const TextStyle(fontSize: 13, height: 1.4)),
+          ],
+          if (!v.matches && v.detectedType.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: AppConstants.barrierTypes.contains(v.detectedType)
+                    ? () => _onTypeSelected(v.detectedType)
+                    : null,
+                style: TextButton.styleFrom(
+                  foregroundColor: color,
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                ),
+                icon: const Icon(Icons.swap_horiz_rounded, size: 18),
+                label: Text('Gemini detectó: "${v.detectedType}"'),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Aviso cuando no se pudo contactar a Gemini (p. ej. API key inválida o
+  /// sin conexión). No bloquea el envío, pero deja claro que no hubo verificación.
+  Widget _buildValidationError() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.muted.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.muted.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.cloud_off_rounded, color: AppColors.muted, size: 18),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text(
+              'No se pudo verificar la foto con Gemini. Revisa tu conexión o la '
+              'configuración de la API. El reporte se puede enviar sin verificar.',
+              style: TextStyle(fontSize: 13, height: 1.4, color: AppColors.muted),
+            ),
+          ),
+          TextButton(
+            onPressed: _analyzing ? null : _validatePhoto,
+            child: const Text('Reintentar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<bool?> _confirmMismatch() {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('La foto no coincide'),
+        content: Text(
+          'Gemini detectó que la foto parece mostrar '
+          '"${_validation!.detectedType}" en vez de "$_selectedType".\n\n'
+          '¿Quieres enviar el reporte de todos modos?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Revisar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Enviar igual'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGeminiResult(String analysis) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -329,7 +501,7 @@ class _ReportBarrierScreenState extends State<ReportBarrierScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          Text(_geminiResult!, style: const TextStyle(fontSize: 13, height: 1.5)),
+          Text(analysis, style: const TextStyle(fontSize: 13, height: 1.5)),
         ],
       ),
     );
