@@ -1,18 +1,36 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  static const primary = Color(0xFF1A73E8);    // Google Blue — WCAG AA sobre blanco
-  static const secondary = Color(0xFF34A853);  // Google Green — accesible
-  static const warning = Color(0xFFF9AB00);    // Amarillo barreras
-  static const danger = Color(0xFFEA4335);     // Rojo urgente
-  static const surface = Color(0xFFF8F9FA);
-  static const onSurface = Color(0xFF202124);
-  static const muted = Color(0xFF5F6368);
+  // --- Structural darks (navbar, sidebar, body text) ---
+  static const darkDeep = Color(0xFF1A2B3C);
+  static const darkMid = Color(0xFF2A3D4F);
 
-  // Colores de marcadores por tipo de barrera
-  static const barrierRamp = Color(0xFFF9AB00);
-  static const barrierSidewalk = Color(0xFFEA4335);
+  // --- Brand teal ramp ---
+  static const brandActive = Color(0xFF289F91);   // interactive elements
+  static const brandHover = Color(0xFF1C7269);    // hover / active state
+  static const brandPassive = Color(0xFFA0D3CD);  // decorative / disabled
+
+  // --- Light backgrounds ---
+  static const surfacePositive = Color(0xFFE1F5EE); // chips, success states, highlighted rows
+  static const surfaceNeutral = Color(0xFFE8F7F5);  // page bg, inputs
+
+  // --- Semantic states (not covered by the 7-color brand ramp) ---
+  static const warning = Color(0xFFF5A623);
+  static const success = Color(0xFF3BAA6E);
+  static const error = Color(0xFFE24B4A);
+
+  // --- Aliases so existing screens compile without changes ---
+  static const primary = brandActive;
+  static const secondary = success;
+  static const danger = error;
+  static const surface = surfaceNeutral;
+  static const onSurface = darkDeep;
+  static const muted = darkMid;
+
+  // --- Barrier map marker colors ---
+  static const barrierRamp = warning;
+  static const barrierSidewalk = error;
   static const barrierSignal = Color(0xFF9334E6);
-  static const barrierOther = Color(0xFF5F6368);
-  static const barrierResolved = Color(0xFF34A853);
+  static const barrierOther = darkMid;
+  static const barrierResolved = success;
 }
