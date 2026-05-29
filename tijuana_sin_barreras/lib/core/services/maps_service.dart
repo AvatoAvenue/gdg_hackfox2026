@@ -1,10 +1,138 @@
 import 'dart:convert';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
+import 'package:uuid/uuid.dart';
 import '../constants/api_keys.dart';
+import '../models/place_models.dart';
 
 class MapsService {
   String get _mapsKey => ApiKeys.googleMapsKey;
+  static const _uuid = Uuid();
+
+  // Centro de Tijuana — sesga búsquedas y rutas a la zona.
+  static const _tijuanaLat = 32.5149;
+  static const _tijuanaLng = -117.0382;
+
+  /// Token de sesión para agrupar autocomplete + details (facturación Google).
+  /// Genera uno al empezar a escribir y deséchalo tras elegir un lugar.
+  String newSessionToken() => _uuid.v4();
+
+  // ---------------------------------------------------------------------------
+  // AUTOCOMPLETE — Places API (New). Soporta CORS → funciona en web y Android.
+  // ---------------------------------------------------------------------------
+
+  /// Devuelve predicciones cercanas a Tijuana para el texto del usuario.
+  Future<List<PlaceSuggestion>> autocompletePlaces(
+    String input, {
+    String? sessionToken,
+  }) async {
+    if (input.trim().isEmpty) return [];
+
+    final uri = Uri.parse('https://places.googleapis.com/v1/places:autocomplete');
+    final body = jsonEncode({
+      'input': input,
+      'languageCode': 'es',
+      'regionCode': 'mx',
+      'locationBias': {
+        'circle': {
+          'center': {'latitude': _tijuanaLat, 'longitude': _tijuanaLng},
+          'radius': 30000.0, // 30 km — área metropolitana de Tijuana
+        },
+      },
+      if (sessionToken != null) 'sessionToken': sessionToken,
+    });
+
+    final response = await http.post(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': _mapsKey,
+      },
+      body: body,
+    );
+
+    if (response.statusCode != 200) return [];
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final suggestions = data['suggestions'] as List?;
+    if (suggestions == null) return [];
+
+    return suggestions
+        .map((s) => PlaceSuggestion.fromJson(s as Map<String, dynamic>))
+        .where((s) => s.isValid)
+        .toList();
+  }
+
+  /// Resuelve un placeId a coordenadas (Place Details New).
+  /// Usa el mismo sessionToken del autocomplete para cerrar la sesión.
+  Future<PlaceResult?> getPlaceDetails(
+    String placeId, {
+    String? sessionToken,
+  }) async {
+    final uri = Uri.parse(
+      'https://places.googleapis.com/v1/places/$placeId'
+      '?languageCode=es&regionCode=mx'
+      '${sessionToken != null ? '&sessionToken=$sessionToken' : ''}',
+    );
+
+    final response = await http.get(
+      uri,
+      headers: {
+        'X-Goog-Api-Key': _mapsKey,
+        'X-Goog-FieldMask': 'id,location,displayName,formattedAddress',
+      },
+    );
+
+    if (response.statusCode != 200) return null;
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return PlaceResult.fromJson(placeId, data);
+  }
+
+  /// Búsqueda de texto (Text Search New) — fallback si el usuario escribe
+  /// y presiona "calcular" sin elegir una sugerencia de la lista.
+  Future<PlaceResult?> searchText(String query) async {
+    if (query.trim().isEmpty) return null;
+
+    final uri = Uri.parse('https://places.googleapis.com/v1/places:searchText');
+    final body = jsonEncode({
+      'textQuery': query,
+      'languageCode': 'es',
+      'regionCode': 'mx',
+      'maxResultCount': 1,
+      'locationBias': {
+        'circle': {
+          'center': {'latitude': _tijuanaLat, 'longitude': _tijuanaLng},
+          'radius': 30000.0,
+        },
+      },
+    });
+
+    final response = await http.post(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': _mapsKey,
+        'X-Goog-FieldMask':
+            'places.id,places.location,places.displayName,places.formattedAddress',
+      },
+      body: body,
+    );
+
+    if (response.statusCode != 200) return null;
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final places = data['places'] as List?;
+    if (places == null || places.isEmpty) return null;
+
+    final place = places.first as Map<String, dynamic>;
+    final id = (place['id'] as String?) ?? '';
+    return PlaceResult.fromJson(id, place);
+  }
+
+  // ---------------------------------------------------------------------------
+  // ROUTES — Routes API v2 (compute routes, modo peatonal).
+  // ---------------------------------------------------------------------------
 
   Future<Map<String, dynamic>?> getAccessibleRoute({
     required LatLng origin,
@@ -50,27 +178,6 @@ class MapsService {
       return jsonDecode(response.body) as Map<String, dynamic>;
     }
     return null;
-  }
-
-  Future<List<Map<String, dynamic>>> searchPlaces(String query) async {
-    final uri = Uri.parse(
-      'https://maps.googleapis.com/maps/api/place/textsearch/json'
-      '?query=${Uri.encodeComponent(query)}'
-      '&location=32.5149,-117.0382'
-      '&radius=15000'
-      '&language=es'
-      '&key=$_mapsKey',
-    );
-
-    final response = await http.get(uri);
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final results = data['results'] as List?;
-      if (results != null) {
-        return results.cast<Map<String, dynamic>>();
-      }
-    }
-    return [];
   }
 
   List<LatLng> decodePolyline(String encoded) {
