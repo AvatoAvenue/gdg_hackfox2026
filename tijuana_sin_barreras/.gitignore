@@ -181,3 +181,7 @@ test-results/
 # 2. No need to add common/security.gitignore separately
 # 3. Test with `git status --ignored` to ensure proper coverage
 
+.antigravitycli/
+.antigravitycli/
+tijuana_sin_barreras/.antigravitycli/
+
