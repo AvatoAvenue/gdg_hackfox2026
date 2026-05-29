@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
 import '../constants/demo_barriers.dart';
 import '../models/barrier_report.dart';
+import '../models/emergency_alert.dart';
 import '../models/user_profile.dart';
 
 class FirebaseService {
@@ -247,5 +248,53 @@ class FirebaseService {
     }
     await batch.commit();
     return DemoBarriers.all.length;
+  }
+
+  // ---------------------------------------------------------------------------
+  // ALERTAS DE EMERGENCIA SOS
+  // ---------------------------------------------------------------------------
+
+  /// Crea una alerta SOS activa con la ubicación del usuario.
+  /// Devuelve el ID del documento creado.
+  Future<String> sendEmergencyAlert({
+    required double lat,
+    required double lng,
+    String? userName,
+  }) async {
+    if (!isSignedIn) {
+      throw StateError('Inicia sesión para enviar una alerta de emergencia.');
+    }
+    final doc = await _db.collection('emergency_alerts').add({
+      'lat': lat,
+      'lng': lng,
+      'userId': currentUserId,
+      'userName': userName,
+      'createdAt': FieldValue.serverTimestamp(),
+      'active': true,
+    });
+    return doc.id;
+  }
+
+  /// Stream de alertas SOS activas de las últimas 2 horas.
+  Stream<List<EmergencyAlert>> getActiveEmergencyAlerts() {
+    return _db
+        .collection('emergency_alerts')
+        .where('active', isEqualTo: true)
+        .snapshots()
+        .map((snap) {
+      final cutoff = DateTime.now().subtract(const Duration(hours: 2));
+      return snap.docs
+          .map(EmergencyAlert.fromFirestore)
+          .where((a) => a.createdAt.isAfter(cutoff))
+          .toList()
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    });
+  }
+
+  /// Desactiva la alerta SOS del usuario (cancela la emergencia).
+  Future<void> cancelEmergencyAlert(String alertId) async {
+    await _db.collection('emergency_alerts').doc(alertId).update({
+      'active': false,
+    });
   }
 }
