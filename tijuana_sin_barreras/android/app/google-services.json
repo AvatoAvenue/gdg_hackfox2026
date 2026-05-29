@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "427747618567-an6gbsocebollfqbmfajv4r29r43tolq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.talento_sin_barreras",
+            "certificate_hash": "d0def56a164e5db04bd6176273523f3aeeb77409"
+          }
+        },
+        {
           "client_id": "427747618567-fgojot57k94f47994l54hl4upu3lrdb0.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
