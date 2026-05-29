@@ -42,7 +42,7 @@ dependencies:
   flutter_dotenv: ^5.1.0
 
   # Fonts
-  google_fonts: 6.3.0 # 6.3.0 rompe con Dart >=3.11 (const Map<FontWeight>)
+  google_fonts: 6.3.3 # 6.3.0 rompe con Dart >=3.11 (const Map<FontWeight>)
 
   # Text-to-Speech (accesibilidad auditiva)
   flutter_tts: ^4.2.0
