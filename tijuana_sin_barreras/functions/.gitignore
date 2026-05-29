@@ -1,0 +1,5 @@
+node_modules/
+# Llaves de servicio — NUNCA subir a git
+serviceAccountKey.json
+*serviceAccount*.json
+*service-account*.json

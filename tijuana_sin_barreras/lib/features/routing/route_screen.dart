@@ -4,7 +4,10 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/models/barrier_report.dart';
 import '../../core/models/place_models.dart';
+import '../../core/models/route_result.dart';
+import '../../core/services/firebase_service.dart';
 import '../../core/services/maps_service.dart';
 import '../../shared/widgets/place_search_field.dart';
 
@@ -26,14 +29,17 @@ class _RouteScreenState extends State<RouteScreen> {
 
   Set<Polyline> _polylines = {};
   Set<Marker> _markers = {};
+  Set<Circle> _circles = {};
   bool _loading = false;
   String? _routeInfo;
+  String? _avoidInfo;
   String? _error;
 
   static const _tijuanaCenter =
       LatLng(AppConstants.tijuanaLat, AppConstants.tijuanaLng);
 
   MapsService get _maps => context.read<MapsService>();
+  FirebaseService get _firebase => context.read<FirebaseService>();
 
   /// Resuelve un extremo: usa el lugar elegido en el autocompletado; si el
   /// usuario escribió sin elegir de la lista, cae al Text Search.
@@ -62,8 +68,10 @@ class _RouteScreenState extends State<RouteScreen> {
       _loading = true;
       _error = null;
       _routeInfo = null;
+      _avoidInfo = null;
       _polylines = {};
       _markers = {};
+      _circles = {};
     });
 
     try {
@@ -79,12 +87,20 @@ class _RouteScreenState extends State<RouteScreen> {
         return;
       }
 
-      final routeData = await _maps.getAccessibleRoute(
+      // Obstáculos activos a evitar (lectura puntual de Firestore). Si falla,
+      // seguimos sin evasión en vez de romper el cálculo de ruta.
+      List<BarrierReport> barriers = [];
+      try {
+        barriers = await _firebase.getActiveBarriersOnce();
+      } catch (_) {}
+
+      final result = await _maps.getRoutesAvoidingBarriers(
         origin: origin.latLng,
         destination: dest.latLng,
+        barriers: barriers,
       );
 
-      if (routeData == null || (routeData['routes'] as List?)?.isEmpty == true) {
+      if (result == null) {
         setState(() {
           _error = 'No se pudo calcular la ruta. Verifica las ubicaciones.';
           _loading = false;
@@ -92,25 +108,10 @@ class _RouteScreenState extends State<RouteScreen> {
         return;
       }
 
-      final route = (routeData['routes'] as List).first as Map<String, dynamic>;
-      final polylineEncoded = route['polyline']['encodedPolyline'] as String;
-      final points = _maps.decodePolyline(polylineEncoded);
-      final distanceM = (route['distanceMeters'] as num).toInt();
-      final durationS = int.tryParse(
-            (route['duration'] as String).replaceAll('s', ''),
-          ) ??
-          0;
-      final durationMin = durationS ~/ 60;
+      final points = result.best.points;
 
       setState(() {
-        _polylines = {
-          Polyline(
-            polylineId: const PolylineId('route'),
-            points: points,
-            color: AppColors.secondary,
-            width: 5,
-          ),
-        };
+        _polylines = _buildPolylines(result);
         _markers = {
           Marker(
             markerId: const MarkerId('origin'),
@@ -125,9 +126,12 @@ class _RouteScreenState extends State<RouteScreen> {
             icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
             infoWindow: InfoWindow(title: 'Destino: ${dest.name}'),
           ),
+          ..._buildBarrierMarkers(result),
         };
+        _circles = _buildBarrierCircles(result);
         _routeInfo =
-            '${(distanceM / 1000).toStringAsFixed(1)} km · ~$durationMin min caminando';
+            '${result.best.distanceKm.toStringAsFixed(1)} km · ~${result.best.durationMinutes} min caminando';
+        _avoidInfo = _buildAvoidInfo(result);
         _loading = false;
       });
 
@@ -163,17 +167,134 @@ class _RouteScreenState extends State<RouteScreen> {
     }
   }
 
+  /// Dibuja la ruta elegida (verde). Si se reencaminó para evitar obstáculos,
+  /// dibuja además la ruta directa por defecto en gris translúcido como
+  /// referencia visual de "lo que se evitó".
+  Set<Polyline> _buildPolylines(RouteResult result) {
+    final lines = <Polyline>{};
+
+    if (result.didReroute) {
+      lines.add(Polyline(
+        polylineId: const PolylineId('route_default'),
+        points: result.defaultOption.points,
+        color: AppColors.muted.withOpacity(0.5),
+        width: 4,
+        patterns: [PatternItem.dash(20), PatternItem.gap(12)],
+      ));
+    }
+
+    lines.add(Polyline(
+      polylineId: const PolylineId('route_best'),
+      points: result.best.points,
+      color: AppColors.secondary,
+      width: 6,
+    ));
+
+    return lines;
+  }
+
+  /// Marcadores para los obstáculos cercanos a la ruta.
+  Set<Marker> _buildBarrierMarkers(RouteResult result) {
+    final remainingIds = result.remainingBarriers.map((b) => b.id).toSet();
+    return result.nearbyBarriers.map((b) {
+      final onRoute = remainingIds.contains(b.id);
+      final emoji = AppConstants.barrierTypeEmoji[b.type] ?? '📍';
+      return Marker(
+        markerId: MarkerId('barrier_${b.id}'),
+        position: LatLng(b.lat, b.lng),
+        icon: BitmapDescriptor.defaultMarkerWithHue(
+          onRoute ? BitmapDescriptor.hueRed : BitmapDescriptor.hueOrange,
+        ),
+        infoWindow: InfoWindow(
+          title: '$emoji ${b.type}',
+          snippet: onRoute ? 'En la ruta' : 'Evitado',
+        ),
+      );
+    }).toSet();
+  }
+
+  /// Círculos de radio para resaltar obstáculos: rojo = en la ruta elegida,
+  /// verde = evitado al reencaminar, naranja tenue = otros cercanos.
+  Set<Circle> _buildBarrierCircles(RouteResult result) {
+    final remainingIds = result.remainingBarriers.map((b) => b.id).toSet();
+    final avoidedIds = result.avoidedBarriers.map((b) => b.id).toSet();
+
+    return result.nearbyBarriers.map((b) {
+      final Color color;
+      if (remainingIds.contains(b.id)) {
+        color = AppColors.danger;
+      } else if (avoidedIds.contains(b.id)) {
+        color = AppColors.secondary;
+      } else {
+        color = Colors.orange;
+      }
+      return Circle(
+        circleId: CircleId('barrier_circle_${b.id}'),
+        center: LatLng(b.lat, b.lng),
+        radius: 25,
+        fillColor: color.withOpacity(0.18),
+        strokeColor: color.withOpacity(0.7),
+        strokeWidth: 2,
+      );
+    }).toSet();
+  }
+
+  /// Texto resumen de la evasión de obstáculos para la barra de info.
+  String _buildAvoidInfo(RouteResult result) {
+    final avoided = result.avoidedBarriers.length;
+    final remaining = result.remainingBarriers.length;
+
+    if (avoided == 0 && remaining == 0) {
+      return 'Sin obstáculos reportados en esta ruta';
+    }
+    if (avoided > 0 && remaining == 0) {
+      return 'Ruta reencaminada: evita $avoided ${_obstWord(avoided)}';
+    }
+    if (avoided > 0 && remaining > 0) {
+      return 'Evita $avoided ${_obstWord(avoided)} · quedan $remaining sin esquivar';
+    }
+    return '$remaining ${_obstWord(remaining)} en la ruta (sin alternativa mejor)';
+  }
+
+  String _obstWord(int n) => n == 1 ? 'obstáculo' : 'obstáculos';
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Ruta Accesible'),
         backgroundColor: AppColors.secondary,
+        actions: [
+          PopupMenuButton<String>(
+            tooltip: 'Datos de demo',
+            icon: const Icon(Icons.science_outlined),
+            onSelected: _onDemoMenu,
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'seed',
+                child: ListTile(
+                  leading: Icon(Icons.add_location_alt_outlined),
+                  title: Text('Sembrar obstáculos demo'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              PopupMenuItem(
+                value: 'clear',
+                child: ListTile(
+                  leading: Icon(Icons.delete_sweep_outlined),
+                  title: Text('Borrar obstáculos demo'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
       body: Column(
         children: [
           _buildSearchPanel(),
           if (_routeInfo != null) _buildRouteInfoBar(),
+          if (_avoidInfo != null) _buildAvoidInfoBar(),
           if (_error != null) _buildErrorBar(),
           Expanded(
             child: GoogleMap(
@@ -182,6 +303,7 @@ class _RouteScreenState extends State<RouteScreen> {
               onMapCreated: _mapController.complete,
               polylines: _polylines,
               markers: _markers,
+              circles: _circles,
               myLocationEnabled: true,
               myLocationButtonEnabled: true,
               zoomControlsEnabled: false,
@@ -276,6 +398,69 @@ class _RouteScreenState extends State<RouteScreen> {
         _destPlace = result;
       }
     });
+  }
+
+  /// Siembra o borra los obstáculos de demo desde el menú.
+  Future<void> _onDemoMenu(String action) async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Procesando obstáculos de demo...')),
+    );
+    try {
+      if (action == 'seed') {
+        final n = await _firebase.seedDemoBarriers();
+        messenger.showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.secondary,
+            content: Text(
+                '$n obstáculos de demo sembrados. Ábrelos en "Mapa de Barreras" '
+                'o calcula una ruta para verlos.'),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      } else if (action == 'clear') {
+        final n = await _firebase.clearDemoBarriers();
+        messenger.showSnackBar(
+          SnackBar(content: Text('$n obstáculos de demo borrados.')),
+        );
+      }
+    } catch (e) {
+      // Surface real errors (p.ej. reglas de Firestore o sesión cerrada) en vez
+      // de fallar en silencio.
+      messenger.showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.danger,
+          content: Text('No se pudo completar: $e'),
+          duration: const Duration(seconds: 8),
+        ),
+      );
+    }
+  }
+
+  /// Barra que resume cuántos obstáculos esquiva la ruta elegida.
+  Widget _buildAvoidInfoBar() {
+    final rerouted = _avoidInfo!.startsWith('Ruta reencaminada') ||
+        _avoidInfo!.startsWith('Evita');
+    final color = rerouted ? AppColors.secondary : AppColors.muted;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: color.withOpacity(0.08),
+      child: Row(
+        children: [
+          Icon(rerouted ? Icons.alt_route : Icons.info_outline,
+              color: color, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _avoidInfo!,
+              style: TextStyle(
+                  fontSize: 13, color: color, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildRouteInfoBar() {

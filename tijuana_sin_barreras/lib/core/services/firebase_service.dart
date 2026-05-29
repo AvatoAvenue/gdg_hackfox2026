@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
+import '../constants/demo_barriers.dart';
 import '../models/barrier_report.dart';
 import '../models/user_profile.dart';
 
@@ -145,6 +146,17 @@ class FirebaseService {
         .map((snap) => snap.docs.map(BarrierReport.fromFirestore).toList());
   }
 
+  /// Lectura puntual (no stream) de las barreras activas — las que aún
+  /// obstaculizan el paso (estado distinto de `resolved`). Se usa al calcular
+  /// una ruta para saber qué obstáculos evitar.
+  Future<List<BarrierReport>> getActiveBarriersOnce() async {
+    final snap = await _db.collection('barriers').get();
+    return snap.docs
+        .map(BarrierReport.fromFirestore)
+        .where((b) => b.status != 'resolved')
+        .toList();
+  }
+
   Future<String> submitBarrierReport({
     required double lat,
     required double lng,
@@ -185,5 +197,55 @@ class FirebaseService {
       'verifiedBy': currentUserId,
       'verifiedAt': FieldValue.serverTimestamp(),
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // DATOS DE DEMO — obstáculos de ejemplo para probar el ruteo
+  // ---------------------------------------------------------------------------
+
+  /// Siembra los obstáculos de ejemplo de [DemoBarriers] en Firestore.
+  ///
+  /// Escribe EXACTAMENTE los mismos campos que [submitBarrierReport] (la ruta
+  /// que ya pasa las reglas de seguridad): `status: 'pending'` y
+  /// `userId: currentUserId`, sin campos extra. Lo único distinto es que usa
+  /// IDs de documento estables (`demo-XX`) en vez de IDs autogenerados, para
+  /// que volver a sembrar sea idempotente y se puedan borrar después.
+  ///
+  /// Devuelve cuántos se escribieron. Requiere sesión iniciada.
+  Future<int> seedDemoBarriers() async {
+    if (!isSignedIn) {
+      throw StateError('Inicia sesión para sembrar obstáculos de demo.');
+    }
+    final batch = _db.batch();
+    for (final b in DemoBarriers.all) {
+      final ref = _db.collection('barriers').doc(b.id);
+      batch.set(ref, {
+        'lat': b.lat,
+        'lng': b.lng,
+        'type': b.type,
+        'description': b.description,
+        'photoBase64': null,
+        'geminiAnalysis': null,
+        'reportedAt': FieldValue.serverTimestamp(),
+        'status': 'pending',
+        'userId': currentUserId,
+      });
+    }
+    await batch.commit();
+    return DemoBarriers.all.length;
+  }
+
+  /// Borra los obstáculos de demo por sus IDs estables (`demo-XX`).
+  /// Devuelve cuántos borró.
+  Future<int> clearDemoBarriers() async {
+    if (!isSignedIn) {
+      throw StateError('Inicia sesión para borrar obstáculos de demo.');
+    }
+    final batch = _db.batch();
+    for (final b in DemoBarriers.all) {
+      batch.delete(_db.collection('barriers').doc(b.id));
+    }
+    await batch.commit();
+    return DemoBarriers.all.length;
   }
 }
